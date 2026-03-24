@@ -16,8 +16,11 @@ export default function Login() {
     setError('');
     setIsLoading(true);
 
+    console.log('Attempting login to:', api.defaults.baseURL);
+
     try {
       const { data } = await api.post('/auth/login', { username, password });
+      console.log('Login response:', data);
 
       if (data.token) {
         login(data.token);
@@ -25,8 +28,9 @@ export default function Login() {
       } else {
         setError(data.message || 'Login failed');
       }
-    } catch {
-      setError('Connection error. Please try again.');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || 'Connection error. Please try again.');
     }
     setIsLoading(false);
   };
