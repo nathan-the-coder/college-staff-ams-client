@@ -35,7 +35,7 @@ export default function UserReport() {
     let filtered = records;
 
     if (dateFilter) {
-      filtered = filtered.filter(record => 
+      filtered = filtered.filter(record =>
         new Date(record.timestamp).toDateString() === new Date(dateFilter).toDateString()
       );
     }
@@ -45,7 +45,7 @@ export default function UserReport() {
     }
 
     if (searchQuery) {
-      filtered = filtered.filter(record => 
+      filtered = filtered.filter(record =>
         record.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -113,7 +113,7 @@ export default function UserReport() {
               >
                 <option value="all">All Roles</option>
                 <option value="Teaching">Teaching</option>
-                <option value="Non-Teaching">Non-Teaching</option>
+                <option value="non-teaching">non-teaching</option>
               </select>
             </div>
           </div>
@@ -157,9 +157,8 @@ export default function UserReport() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-600">{record.role}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        record.type === 'in' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                      }`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${record.type === 'in' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                        }`}>
                         {record.type === 'in' ? 'Time In' : 'Time Out'}
                       </span>
                     </td>

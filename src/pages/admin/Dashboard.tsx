@@ -46,21 +46,21 @@ export default function Dashboard() {
       try {
         const usersRes = await api.get<User[]>('/users');
         const logsRes = await api.get<AttendanceLog[]>('/attendance/today');
-        
+
         const users = usersRes.data;
         const logs = logsRes.data;
-        
+
         const total = users.length;
         const present = logs.filter(log => log.type === 'in').length;
-        const teaching = users.filter(u => u.role === 'Teaching').length;
-        
+        const teaching = users.filter(u => u.role === 'teaching').length;
+
         setStats(s => [
           { label: 'Total Staff', value: total, icon: s[0].icon, color: 'bg-blue-500' },
           { label: 'Present Today', value: present, icon: s[1].icon, color: 'bg-green-500' },
           { label: 'Absent Today', value: total - present, icon: s[2].icon, color: 'bg-red-500' },
           { label: 'Teaching Staff', value: teaching, icon: s[3].icon, color: 'bg-purple-500' },
         ]);
-        
+
         setRecentLogs(logs.slice(0, 5).map(log => ({
           _id: log._id,
           name: log.name,

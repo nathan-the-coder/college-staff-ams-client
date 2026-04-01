@@ -9,7 +9,7 @@ export default function FaceEnrollment() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'Teaching' | 'Non-Teaching'>('Teaching');
+  const [role, setRole] = useState<'teaching' | 'non-teaching'>('teaching');
 
   useEffect(() => {
     const loadModels = async () => {
@@ -81,9 +81,8 @@ export default function FaceEnrollment() {
         <h1 className="text-2xl font-bold text-white mb-6 text-center">Face Enrollment</h1>
 
         {message && (
-          <div className={`mb-4 p-3 rounded-lg text-center ${
-            message.includes('success') ? 'bg-green-600' : 'bg-red-600'
-          } text-white`}>
+          <div className={`mb-4 p-3 rounded-lg text-center ${message.includes('success') ? 'bg-green-600' : 'bg-red-600'
+            } text-white`}>
             {message}
           </div>
         )}
@@ -117,11 +116,11 @@ export default function FaceEnrollment() {
 
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'Teaching' | 'Non-Teaching')}
+                onChange={(e) => setRole(e.target.value as 'teaching | 'Non - teaching)}
                 className="w-full px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="Teaching">Teaching</option>
-                <option value="Non-Teaching">Non-Teaching</option>
+                <option value="non-teaching">non-teaching</option>
               </select>
 
               <button

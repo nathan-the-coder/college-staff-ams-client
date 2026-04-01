@@ -13,7 +13,7 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState<'Teaching' | 'Non-Teaching'>('Teaching');
+  const [editRole, setEditRole] = useState<'teaching' | 'non-teaching'>('teaching');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchUsers = async () => {
@@ -33,12 +33,12 @@ export default function UserManagement() {
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setEditName(user.name);
-    setEditRole(user.role as 'Teaching' | 'Non-Teaching');
+    setEditRole(user.role as 'teaching' | 'non-teaching');
   };
 
   const handleSave = async () => {
     if (!editingUser) return;
-    
+
     try {
       await api.put(`/users/${editingUser._id}`, {
         name: editName,
@@ -53,7 +53,7 @@ export default function UserManagement() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
-    
+
     try {
       await api.delete(`/users/${id}`);
       fetchUsers();
@@ -62,7 +62,7 @@ export default function UserManagement() {
     }
   };
 
-  const filteredUsers = users.filter(user => 
+  const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -110,9 +110,8 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        user.role === 'Teaching' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'teaching ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {user.role}
                       </span>
                     </td>
@@ -133,63 +132,65 @@ export default function UserManagement() {
                       </div>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center text-gray-500">No users found</td>
-                </tr>
+            ))
+            ) : (
+            <tr>
+              <td colSpan={3} className="px-6 py-8 text-center text-gray-500">No users found</td>
+            </tr>
               )}
-            </tbody>
-          </table>
-        </div>
+          </tbody>
+        </table>
       </div>
+    </div>
 
-      {editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Edit User</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-                <select
-                  value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as 'Teaching' | 'Non-Teaching')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="Teaching">Teaching</option>
-                  <option value="Non-Teaching">Non-Teaching</option>
-                </select>
-              </div>
+      {
+    editingUser && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl p-6 w-full max-w-md">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Edit User</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
             </div>
 
-            <div className="flex gap-2 mt-6">
-              <button
-                onClick={handleSave}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+              <select
+                value={editRole}
+                onChange={(e) => setEditRole(e.target.value as 'teaching | 'Non - teaching)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                Save Changes
-              </button>
-              <button
-                onClick={() => setEditingUser(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
+                <option value="Teaching">Teaching</option>
+                <option value="non-teaching">non-teaching</option>
+              </select>
             </div>
           </div>
+
+          <div className="flex gap-2 mt-6">
+            <button
+              onClick={handleSave}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Save Changes
+            </button>
+            <button
+              onClick={() => setEditingUser(null)}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    )
+  }
+    </div >
   );
 }
