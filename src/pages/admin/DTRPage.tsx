@@ -154,19 +154,19 @@ export default function DTRPage() {
           <title>DTR - ${getSelectedUserName()}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Georgia, 'Times New Roman', serif; padding: 20px; color: #1f2a42; }
+            body { font-family: Georgia, 'Times New Roman', serif; padding: 20px; color: #253d04; }
             .dtr-container { max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1f2a42; padding-bottom: 10px; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #253d04; padding-bottom: 10px; }
             .header h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 5px; }
             .header p { font-size: 14px; margin-bottom: 3px; }
             table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #1f2a42; padding: 8px; text-align: left; font-size: 12px; }
+            th, td { border: 1px solid #253d04; padding: 8px; text-align: left; font-size: 12px; }
             th { background: #f3ead0; }
             .text-center { text-align: center; }
             .late { color: #b91c1c; font-weight: bold; }
             .footer { margin-top: 20px; display: flex; justify-content: space-between; }
             .signature { width: 45%; }
-            .signature-line { border-bottom: 1px solid #1f2a42; margin-top: 40px; }
+            .signature-line { border-bottom: 1px solid #253d04; margin-top: 40px; }
             .signature p { font-size: 12px; }
           </style>
         </head>

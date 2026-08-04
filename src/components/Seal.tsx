@@ -14,7 +14,7 @@ export default function Seal({ className = 'h-10 w-10' }: SealProps) {
     >
       <path
         d="M24 3 43 11v16c0 13.5-8 22.5-19 28C13 49.5 5 40.5 5 27V11L24 3z"
-        fill="#1f2a42"
+        fill="#253d04"
         stroke="#b08d2e"
         strokeWidth="1.6"
         strokeLinejoin="round"

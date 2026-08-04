@@ -188,7 +188,7 @@ export default function AttendanceScanner() {
           <div className="min-w-0">
             <h1 className="text-lg text-white sm:text-xl">Staff Attendance System</h1>
             <p className="text-xs tracking-wide text-gold-300 sm:text-sm">
-              College of Sciences, Technology and Engineering
+              For All Faculty and Staff
             </p>
           </div>
           <a

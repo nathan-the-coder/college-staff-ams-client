@@ -6,18 +6,18 @@
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     sans-serif;
 
-  /* Institutional navy */
-  --color-navy-50: #f3f5f9;
-  --color-navy-100: #e4e8f1;
-  --color-navy-200: #c9d2e4;
-  --color-navy-300: #a4b3d0;
-  --color-navy-400: #7b8fb8;
-  --color-navy-500: #5a70a0;
-  --color-navy-600: #465a86;
-  --color-navy-700: #39496c;
-  --color-navy-800: #2a3652;
-  --color-navy-900: #1f2a42;
-  --color-navy-950: #151d30;
+  /* Institutional green (primary #457507) */
+  --color-navy-50: #f4f7e9;
+  --color-navy-100: #e8efd2;
+  --color-navy-200: #d2e0a8;
+  --color-navy-300: #b3c975;
+  --color-navy-400: #93aa4b;
+  --color-navy-500: #5f7d24;
+  --color-navy-600: #457507;
+  --color-navy-700: #3b6306;
+  --color-navy-800: #304f05;
+  --color-navy-900: #253d04;
+  --color-navy-950: #1a2b03;
 
   /* Brass / gold accent */
   --color-gold-50: #faf7ec;
