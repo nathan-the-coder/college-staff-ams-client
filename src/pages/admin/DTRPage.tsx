@@ -35,44 +35,54 @@ export default function DTRPage() {
   const [endDate, setEndDate] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
 
-  const fetchUsers = async () => {
-    try {
-      const response = await api.get<User[]>('/users');
-      setUsers(response.data.filter(u => u.role !== 'Admin'));
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
-
-  const fetchRecords = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (selectedUser) params.append('userId', selectedUser);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-
-      const response = await api.get<AttendanceRecord[]>(
-        `/attendance/dtr?${params}`
-      );
-      setRecords(response.data);
-    } catch (error) {
-      console.error('Error fetching records:', error);
-    }
-    setIsLoading(false);
-  };
-
   useEffect(() => {
-    fetchUsers();
+    let cancelled = false;
+
+    const loadUsers = async () => {
+      try {
+        const response = await api.get<User[]>('/users');
+        if (!cancelled) setUsers(response.data.filter((u) => u.role !== 'Admin'));
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    };
+
+    loadUsers();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    fetchRecords();
+    let cancelled = false;
+
+    const loadRecords = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (selectedUser) params.append('userId', selectedUser);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+
+        const response = await api.get<AttendanceRecord[]>(`/attendance/dtr?${params}`);
+        if (!cancelled) setRecords(response.data);
+      } catch (error) {
+        console.error('Error fetching records:', error);
+      }
+      if (!cancelled) setIsLoading(false);
+    };
+
+    loadRecords();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedUser, startDate, endDate]);
 
   const processedRecords = useMemo(() => {
     const grouped: { [key: string]: AttendanceRecord[] } = {};
-    
-    records.forEach(record => {
+
+    records.forEach((record) => {
       const date = new Date(record.timestamp).toDateString();
       if (!grouped[date]) {
         grouped[date] = [];
@@ -81,23 +91,27 @@ export default function DTRPage() {
     });
 
     const result: DailyRecord[] = Object.entries(grouped).map(([date, dayRecords]) => {
-      const timeInRecord = dayRecords.find(r => r.type === 'in');
-      const timeOutRecord = dayRecords.find(r => r.type === 'out');
-      
+      const timeInRecord = dayRecords.find((r) => r.type === 'in');
+      const timeOutRecord = dayRecords.find((r) => r.type === 'out');
+
       let hoursWorked = 0;
       if (timeInRecord && timeOutRecord) {
         const inTime = new Date(timeInRecord.timestamp).getTime();
         const outTime = new Date(timeOutRecord.timestamp).getTime();
-        hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
+        hoursWorked = Math.max((outTime - inTime) / (1000 * 60 * 60), 0);
       }
 
       return {
         date,
-        timeIn: timeInRecord ? new Date(timeInRecord.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
-        timeOut: timeOutRecord ? new Date(timeOutRecord.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+        timeIn: timeInRecord
+          ? new Date(timeInRecord.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : null,
+        timeOut: timeOutRecord
+          ? new Date(timeOutRecord.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : null,
         hoursWorked: Math.round(hoursWorked * 100) / 100,
         isLate: timeInRecord?.isLate || false,
-        status: timeInRecord ? (timeOutRecord ? 'Complete' : 'Incomplete') : 'No Record'
+        status: timeInRecord ? (timeOutRecord ? 'Complete' : 'Incomplete') : 'No Record',
       };
     });
 
@@ -110,8 +124,8 @@ export default function DTRPage() {
 
   const generateCSV = () => {
     let csv = 'Date,Time In,Time Out,Hours Worked,Late,Status\n';
-    
-    processedRecords.forEach(record => {
+
+    processedRecords.forEach((record) => {
       csv += `${record.date},${record.timeIn || ''},${record.timeOut || ''},${record.hoursWorked},${record.isLate ? 'Yes' : 'No'},${record.status}\n`;
     });
 
@@ -121,8 +135,9 @@ export default function DTRPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `DTR_${getSelectedUserName().replace(' ', '_')}_${startDate || 'start'}_${endDate || 'end'}.csv`;
+    a.download = `DTR_${getSelectedUserName().replace(/\s+/g, '_')}_${startDate || 'start'}_${endDate || 'end'}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const handlePrint = () => {
@@ -139,20 +154,19 @@ export default function DTRPage() {
           <title>DTR - ${getSelectedUserName()}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; padding: 20px; }
+            body { font-family: Georgia, 'Times New Roman', serif; padding: 20px; color: #1f2a42; }
             .dtr-container { max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-            .header h1 { font-size: 18px; margin-bottom: 5px; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1f2a42; padding-bottom: 10px; }
+            .header h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 5px; }
             .header p { font-size: 14px; margin-bottom: 3px; }
             table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
-            th { background: #f0f0f0; }
+            th, td { border: 1px solid #1f2a42; padding: 8px; text-align: left; font-size: 12px; }
+            th { background: #f3ead0; }
             .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .late { color: red; font-weight: bold; }
+            .late { color: #b91c1c; font-weight: bold; }
             .footer { margin-top: 20px; display: flex; justify-content: space-between; }
             .signature { width: 45%; }
-            .signature-line { border-bottom: 1px solid #000; margin-top: 40px; }
+            .signature-line { border-bottom: 1px solid #1f2a42; margin-top: 40px; }
             .signature p { font-size: 12px; }
           </style>
         </head>
@@ -172,8 +186,8 @@ export default function DTRPage() {
   };
 
   const getSelectedUserName = () => {
-    if (!selectedUser) return 'All Instructors';
-    const user = users.find(u => u._id === selectedUser);
+    if (!selectedUser) return 'All Staff';
+    const user = users.find((u) => u._id === selectedUser);
     return user?.name || 'Unknown';
   };
 
@@ -189,7 +203,7 @@ export default function DTRPage() {
   };
 
   return (
-    <div className="p-6">
+    <div>
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -200,60 +214,70 @@ export default function DTRPage() {
       `}</style>
 
       <div className="no-print mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Daily Time Record (DTR)</h1>
-        <p className="text-gray-500 mt-1">Generate and export instructor attendance records</p>
+        <h1 className="text-3xl text-navy-900">Daily Time Record</h1>
+        <p className="mt-1 text-sm text-navy-500">Generate and export staff attendance records</p>
       </div>
 
-      <div className="no-print bg-white rounded-xl shadow-sm border border-gray-100 mb-6 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="no-print card mb-6 overflow-hidden">
+        <div className="border-b border-navy-100 bg-navy-50/60 px-6 py-4">
+          <h2 className="font-display text-base font-semibold text-navy-900">Filters</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-5 p-6 md:grid-cols-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Instructor</label>
+            <label htmlFor="dtr-user" className="label">
+              Staff Member
+            </label>
             <select
+              id="dtr-user"
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="input"
             >
-              <option value="">All Instructors</option>
-              {users.map(user => (
-                <option key={user._id} value={user._id}>{user.name}</option>
+              <option value="">All Staff</option>
+              {users.map((user) => (
+                <option key={user._id} value={user._id}>
+                  {user.name}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+            <label htmlFor="dtr-start" className="label">
+              Start Date
+            </label>
             <input
+              id="dtr-start"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+            <label htmlFor="dtr-end" className="label">
+              End Date
+            </label>
             <input
+              id="dtr-end"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="input"
             />
           </div>
-          <div className="flex items-end gap-2">
-            <button
-              onClick={clearFilters}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-            >
-              Clear
+          <div className="flex items-end">
+            <button onClick={clearFilters} className="btn-outline w-full">
+              Clear Filters
             </button>
           </div>
         </div>
-
-        <div className="flex gap-2 mt-4">
+        <div className="flex flex-col gap-3 border-t border-navy-100 px-6 py-4 sm:flex-row">
           <button
             onClick={generateCSV}
             disabled={records.length === 0}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="btn-outline flex-1 sm:flex-none sm:px-6"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Export CSV
@@ -261,9 +285,9 @@ export default function DTRPage() {
           <button
             onClick={handlePrint}
             disabled={records.length === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="btn-primary flex-1 sm:flex-none sm:px-6"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             Print / PDF
@@ -271,86 +295,112 @@ export default function DTRPage() {
         </div>
       </div>
 
-      <div ref={printRef} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 print-only">
+      <div ref={printRef} className="card print-only overflow-hidden p-6">
         <div className="header">
-          <h1 className="text-xl font-bold">ATTENDANCE RECORD</h1>
-          <p className="text-lg font-semibold">{getSelectedUserName()}</p>
-          <p className="text-sm">Position: {selectedUser ? users.find(u => u._id === selectedUser)?.role : 'All Instructors'}</p>
-          <p className="text-sm">Period: {formatDateRange()}</p>
+          <h1 className="font-display text-xl text-navy-900">ATTENDANCE RECORD</h1>
+          <p className="font-display text-lg font-semibold text-navy-900">{getSelectedUserName()}</p>
+          <p className="text-sm text-navy-500">
+            Position: {selectedUser ? users.find((u) => u._id === selectedUser)?.role : 'All Staff'}
+          </p>
+          <p className="text-sm text-navy-500">Period: {formatDateRange()}</p>
         </div>
 
         {isLoading ? (
-          <div className="p-6 text-center text-gray-500">Loading...</div>
+          <div className="p-6 text-center text-sm text-navy-400">Loading…</div>
         ) : processedRecords.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">No records found</div>
+          <div className="p-6 text-center text-sm text-navy-400">No records found</div>
         ) : (
           <>
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border">Date</th>
-                  <th className="px-4 py-2 text-center text-sm font-medium text-gray-700 border">Time In</th>
-                  <th className="px-4 py-2 text-center text-sm font-medium text-gray-700 border">Time Out</th>
-                  <th className="px-4 py-2 text-center text-sm font-medium text-gray-700 border">Hours</th>
-                  <th className="px-4 py-2 text-center text-sm font-medium text-gray-700 border">Late</th>
-                  <th className="px-4 py-2 text-center text-sm font-medium text-gray-700 border">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {processedRecords.map((record, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm border">
-                      {new Date(record.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-center border">{record.timeIn || '-'}</td>
-                    <td className="px-4 py-2 text-sm text-center border">{record.timeOut || '-'}</td>
-                    <td className="px-4 py-2 text-sm text-center border">{record.hoursWorked || '-'}</td>
-                    <td className="px-4 py-2 text-sm text-center border">
-                      {record.isLate ? <span className="text-red-600 font-bold">LATE</span> : <span className="text-green-600">-</span>}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-center border">
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        record.status === 'Complete' ? 'bg-green-100 text-green-800' : 
-                        record.status === 'Incomplete' ? 'bg-yellow-100 text-yellow-800' : 
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {record.status}
-                      </span>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-navy-100">
+                  <tr>
+                    <th className="table-th">Date</th>
+                    <th className="table-th text-center">Time In</th>
+                    <th className="table-th text-center">Time Out</th>
+                    <th className="table-th text-center">Hours</th>
+                    <th className="table-th text-center">Late</th>
+                    <th className="table-th text-center">Status</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-100 font-bold">
-                  <td className="px-4 py-2 text-sm border" colSpan={3}>TOTAL HOURS</td>
-                  <td className="px-4 py-2 text-sm text-center border">{totalHours.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-sm border" colSpan={2}></td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-navy-50">
+                  {processedRecords.map((record, index) => (
+                    <tr key={index} className="transition-colors hover:bg-navy-50/50">
+                      <td className="px-4 py-3 text-sm text-navy-900">
+                        {new Date(record.date).toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm tabular-nums text-navy-700">
+                        {record.timeIn || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm tabular-nums text-navy-700">
+                        {record.timeOut || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm tabular-nums text-navy-700">
+                        {record.hoursWorked || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm">
+                        {record.isLate ? (
+                          <span className="font-bold text-red-600">LATE</span>
+                        ) : (
+                          <span className="text-green-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={`badge ${
+                            record.status === 'Complete'
+                              ? 'bg-green-50 text-green-700'
+                              : record.status === 'Incomplete'
+                                ? 'bg-gold-100 text-gold-800'
+                                : 'bg-red-50 text-red-700'
+                          }`}
+                        >
+                          {record.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-navy-100 bg-navy-50/60">
+                  <tr>
+                    <td className="px-4 py-3 text-sm font-bold text-navy-900" colSpan={3}>
+                      TOTAL HOURS
+                    </td>
+                    <td className="px-4 py-3 text-center text-sm font-bold tabular-nums text-navy-900">
+                      {totalHours.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3" colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-            <div className="footer mt-8">
-              <div className="signature">
-                <div className="signature-line"></div>
-                <p className="text-sm mt-1">Instructor Signature</p>
+            <div className="footer mt-10 flex justify-between">
+              <div className="w-[45%]">
+                <div className="border-b border-navy-900" style={{ marginTop: 40 }} />
+                <p className="mt-1 text-xs text-navy-500">Staff Signature</p>
               </div>
-              <div className="signature">
-                <div className="signature-line"></div>
-                <p className="text-sm mt-1">Principal/HR Signature</p>
+              <div className="w-[45%]">
+                <div className="border-b border-navy-900" style={{ marginTop: 40 }} />
+                <p className="mt-1 text-xs text-navy-500">Principal / HR Signature</p>
               </div>
             </div>
 
-            <div className="text-center text-xs text-gray-500 mt-6">
+            <div className="mt-6 text-center text-xs text-navy-400">
               <p>Generated on {new Date().toLocaleDateString()}</p>
             </div>
           </>
         )}
       </div>
 
-      <div className="no-print px-6 py-4 border-t border-gray-100 bg-gray-50">
-        <p className="text-sm text-gray-500">
-          Showing {processedRecords.length} days with {records.length} records | Total Hours: {totalHours.toFixed(2)}
-        </p>
+      <div className="no-print mt-4 text-sm text-navy-400">
+        Showing {processedRecords.length} days with {records.length} records · Total Hours:{' '}
+        {totalHours.toFixed(2)}
       </div>
     </div>
   );

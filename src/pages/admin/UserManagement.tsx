@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../../lib/api';
 
 interface User {
   _id: string;
   name: string;
   role: string;
-  faceDescriptor?: number[];
 }
 
 export default function UserManagement() {
@@ -13,10 +12,11 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState<'teaching' | 'non-teaching'>('teaching');
+  const [editRole, setEditRole] = useState<'Instructor' | 'Staff'>('Instructor');
   const [searchQuery, setSearchQuery] = useState('');
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const response = await api.get<User[]>('/users');
       setUsers(response.data);
@@ -24,173 +24,223 @@ export default function UserManagement() {
       console.error('Error fetching users:', error);
     }
     setIsLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchUsers();
+    let cancelled = false;
+
+    const loadUsers = async () => {
+      try {
+        const response = await api.get<User[]>('/users');
+        if (!cancelled) setUsers(response.data);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    loadUsers();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setEditName(user.name);
-    setEditRole(user.role as 'teaching' | 'non-teaching');
+    setEditRole(user.role as 'Instructor' | 'Staff');
   };
 
   const handleSave = async () => {
     if (!editingUser) return;
+    if (!editName.trim()) {
+      setNotice({ kind: 'error', text: 'Name cannot be empty.' });
+      return;
+    }
 
     try {
       await api.put(`/users/${editingUser._id}`, {
-        name: editName,
-        role: editRole
+        name: editName.trim(),
+        role: editRole,
       });
       setEditingUser(null);
+      setNotice({ kind: 'success', text: 'User updated successfully.' });
       fetchUsers();
     } catch (error) {
       console.error('Error updating user:', error);
+      setNotice({ kind: 'error', text: 'Failed to update user.' });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    if (!window.confirm('Are you sure you want to delete this user?')) return;
 
     try {
       await api.delete(`/users/${id}`);
+      setNotice({ kind: 'success', text: 'User deleted successfully.' });
       fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
+      setNotice({ kind: 'error', text: 'Failed to delete user.' });
     }
   };
 
-  const filteredUsers = users.filter(user =>
+  const filteredUsers = users.filter((user) =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="p-6">
+    <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">User Management</h1>
-        <p className="text-gray-500 mt-1">Manage enrolled staff members</p>
+        <h1 className="text-3xl text-navy-900">User Management</h1>
+        <p className="mt-1 text-sm text-navy-500">Manage enrolled staff members</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
-        <div className="p-4 border-b border-gray-100">
-          <input
-            type="text"
-            placeholder="Search users..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-          />
+      {notice && (
+        <div
+          className={`mb-5 rounded-md border px-4 py-3 text-sm ${
+            notice.kind === 'success'
+              ? 'border-green-200 bg-green-50 text-green-800'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
+
+      <div className="card overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-navy-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:w-72">
+            <svg
+              className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-navy-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search users…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="input pl-9"
+            />
+          </div>
+          <span className="text-xs text-navy-400">
+            {filteredUsers.length} of {users.length} staff
+          </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="border-b border-navy-100">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="table-th">Name</th>
+                <th className="table-th">Role</th>
+                <th className="table-th text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-navy-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center text-gray-500">Loading...</td>
+                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-navy-400">
+                    Loading…
+                  </td>
                 </tr>
               ) : filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => (
-                  <tr key={user._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                          <span className="text-blue-600 font-medium">{user.name.charAt(0)}</span>
+                  <tr key={user._id} className="transition-colors hover:bg-navy-50/50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy-800 font-display text-sm text-gold-200">
+                          {user.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-gray-800">{user.name}</span>
+                        <span className="font-medium text-navy-900">{user.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.role === 'teaching ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`badge ${
+                          user.role === 'Instructor'
+                            ? 'bg-navy-100 text-navy-800'
+                            : 'bg-gold-100 text-gold-800'
+                        }`}
+                      >
                         {user.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEdit(user)}
-                          className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
-                        >
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => handleEdit(user)} className="btn-outline px-3 py-1.5 text-xs">
                           Edit
                         </button>
-                        <button
-                          onClick={() => handleDelete(user._id)}
-                          className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
-                        >
+                        <button type="button" onClick={() => handleDelete(user._id)} className="btn-danger px-3 py-1.5 text-xs">
                           Delete
                         </button>
                       </div>
                     </td>
                   </tr>
-            ))
-            ) : (
-            <tr>
-              <td colSpan={3} className="px-6 py-8 text-center text-gray-500">No users found</td>
-            </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-navy-400">
+                    No users found
+                  </td>
+                </tr>
               )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-      {
-    editingUser && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl p-6 w-full max-w-md">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Edit User</h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-              <select
-                value={editRole}
-                onChange={(e) => setEditRole(e.target.value as 'teaching | 'Non - teaching)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="Teaching">Teaching</option>
-                <option value="non-teaching">non-teaching</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex gap-2 mt-6">
-            <button
-              onClick={handleSave}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              Save Changes
-            </button>
-            <button
-              onClick={() => setEditingUser(null)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
-    )
-  }
-    </div >
+
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/50 p-4">
+          <div className="card w-full max-w-md">
+            <div className="border-b border-navy-100 px-6 py-4">
+              <h2 className="text-lg text-navy-900">Edit User</h2>
+            </div>
+            <div className="space-y-5 px-6 py-6">
+              <div>
+                <label htmlFor="edit-name" className="label">
+                  Name
+                </label>
+                <input
+                  id="edit-name"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-role" className="label">
+                  Role
+                </label>
+                <select
+                  id="edit-role"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as 'Instructor' | 'Staff')}
+                  className="input"
+                >
+                  <option value="Instructor">Instructor</option>
+                  <option value="Staff">Staff</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 border-t border-navy-100 px-6 py-4">
+              <button type="button" onClick={handleSave} className="btn-primary flex-1">
+                Save Changes
+              </button>
+              <button type="button" onClick={() => setEditingUser(null)} className="btn-outline">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

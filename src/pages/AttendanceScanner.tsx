@@ -1,98 +1,128 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
+import axios from 'axios';
 import api from '../lib/api';
+import Seal from '../components/Seal';
+
+const MODEL_URL = '/models';
+const SCAN_INTERVAL_MS = 3000;
+const DETECT_RETRIES = 4;
+const RETRY_DELAY_MS = 250;
+
+interface CheckResult {
+  success: boolean;
+  name?: string;
+  role?: string;
+  type?: 'in' | 'out';
+  isLate?: boolean;
+  message?: string;
+}
 
 export default function AttendanceScanner() {
   const webcamRef = useRef<Webcam>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const recognizedUserRef = useRef<{ name: string; role: string } | null>(null);
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
+
   const [isScanning, setIsScanning] = useState(false);
+  const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
   const [recognizedUser, setRecognizedUser] = useState<{ name: string; role: string } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    const loadModels = async () => {
-      const MODEL_URL = '/models';
-      setIsScanning(true);
-      try {
-        await Promise.all([
-          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        ]);
-        setIsModelLoaded(true);
-        setMessage('System ready. Please position your face in the camera.');
-        setMessageType('info');
-      } catch (error) {
-        console.error('Error loading models:', error);
-        setMessage('Failed to load face detection. Please refresh.');
-        setMessageType('error');
-      }
-      setIsScanning(false);
-    };
-    loadModels();
-
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const drawFaceBox = useCallback(async () => {
-    if (!webcamRef.current || !canvasRef.current || !isModelLoaded) return;
+  // Load the same face-api models used by Face Enrollment
+  // (ssdMobilenetv1 + landmarks + recognition) so descriptors match.
+  useEffect(() => {
+    let cancelled = false;
 
-    const video = webcamRef.current.video;
-    if (!video || !video.readyState) return;
+    const loadModels = async () => {
+      try {
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        if (!cancelled) setIsModelLoaded(true);
+      } catch (error) {
+        console.error('Error loading face models:', error);
+        if (!cancelled) {
+          setMessage('Failed to load face recognition models. Please refresh.');
+          setMessageType('error');
+        }
+      }
+    };
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    loadModels();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const handleUserMedia = useCallback(() => {
+    setIsCameraReady(true);
+  }, []);
+
+  const handleUserMediaError = useCallback((error: string | DOMException) => {
+    console.error('Camera error:', error);
+    setIsCameraReady(false);
+    const detail = typeof error === 'string' ? error : error?.message || '';
+    setMessage(detail || 'Unable to access camera. Please check permissions.');
+    setMessageType('error');
+  }, []);
+
+  const isVideoReady = useCallback(() => {
+    const video = webcamRef.current?.video;
+    return !!video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && !video.paused;
+  }, []);
+
+  // Single detection pass: waits for the stream to be decodable, then returns
+  // the 128-dim descriptor or null (transient/black frames return null).
+  const detectDescriptor = useCallback(async (): Promise<number[] | null> => {
+    const video = webcamRef.current?.video;
+    if (!video) return null;
+
+    for (let i = 0; i < 6; i++) {
+      if (isVideoReady()) break;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    }
+    if (!isVideoReady()) return null;
 
     try {
-      const detections = await faceapi
-        .detectAllFaces(video)
-        .withFaceLandmarks();
-
-      const isRecognized = recognizedUserRef.current !== null;
-
-      detections.forEach((detection) => {
-        const box = detection.detection.box;
-        
-        ctx.strokeStyle = isRecognized ? '#22c55e' : '#3b82f6';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
-
-        ctx.fillStyle = isRecognized ? '#22c55e' : '#3b82f6';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(
-          isRecognized ? recognizedUserRef.current!.name : 'Face Detected',
-          box.x,
-          box.y > 20 ? box.y - 10 : box.y + box.height + 20
-        );
-      });
+      const detection = await faceapi
+        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      return detection ? Array.from(detection.descriptor) : null;
     } catch (error) {
-      // Silent fail for continuous detection
+      console.error('Face detection error:', error);
+      return null;
     }
-  }, [isModelLoaded]);
+  }, [isVideoReady]);
 
-  useEffect(() => {
-    if (isModelLoaded) {
-      const interval = setInterval(drawFaceBox, 100);
-      return () => clearInterval(interval);
+  const sendFrameToBackend = useCallback(async (): Promise<CheckResult | null> => {
+    if (!isModelLoaded) return null;
+
+    // Try a few frames before concluding there is no face.
+    let descriptor: number[] | null = null;
+    for (let i = 0; i < DETECT_RETRIES; i++) {
+      descriptor = await detectDescriptor();
+      if (descriptor) break;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
     }
-  }, [isModelLoaded, drawFaceBox]);
+    if (!descriptor) return null;
+
+    const response = await api.post<CheckResult>('/attendance/check', {
+      faceDescriptor: descriptor,
+    });
+
+    return response.data;
+  }, [isModelLoaded, detectDescriptor]);
 
   const handleScan = useCallback(async () => {
-    if (!webcamRef.current || !isModelLoaded) return;
-
-    const video = webcamRef.current.video;
-    if (!video) return;
+    if (!isModelLoaded || !isCameraReady) return;
 
     setIsScanning(true);
     setMessage('Scanning...');
@@ -100,145 +130,218 @@ export default function AttendanceScanner() {
     setRecognizedUser(null);
 
     try {
-      const detection = await faceapi
-        .detectSingleFace(video)
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+      const data = await sendFrameToBackend();
 
-      if (!detection) {
-        setMessage('No face detected. Please try again.');
+      if (!data) {
+        setMessage('No face detected. Please position your face in the camera.');
         setMessageType('error');
-        setIsScanning(false);
         return;
       }
 
-      const descriptor = Array.from(detection.descriptor);
+      if (data.success) {
+        const { name, role, type, isLate } = data;
 
-      const response = await api.post('/attendance/check', {
-        faceDescriptor: descriptor,
-      });
+        setRecognizedUser({ name: name || '', role: role || '' });
 
-      if (response.data.success) {
-        const { name, role, type, isLate } = response.data;
-        recognizedUserRef.current = { name, role };
-        setRecognizedUser({ name, role });
-        
-        if (isLate) {
-          setMessage(`LATE: Time In recorded for ${name}`);
-        } else {
-          setMessage(`${type === 'in' ? 'Time In' : 'Time Out'} recorded for ${name}`);
-        }
+        setMessage(
+          isLate
+            ? `LATE: Time In recorded for ${name}`
+            : `${type === 'in' ? 'Time In' : 'Time Out'} recorded for ${name}`
+        );
         setMessageType('success');
       } else {
-        recognizedUserRef.current = null;
-        setMessage(response.data.message || 'User not recognized');
+        setMessage(data.message || 'User not recognized');
         setMessageType('error');
       }
     } catch (error) {
-      const err = error as { response?: { data?: { message?: string } } };
-      console.error('Scan error:', error);
-      setMessage(err.response?.data?.message || 'Error processing. Please try again.');
+      let errorMessage = 'Error processing. Please try again.';
+      if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.message || errorMessage;
+      }
+      setMessage(errorMessage);
       setMessageType('error');
+    } finally {
+      setIsScanning(false);
     }
-    setIsScanning(false);
-  }, [isModelLoaded]);
+  }, [isModelLoaded, isCameraReady, sendFrameToBackend]);
 
+  // Auto-scan every few seconds until someone is recognized.
   useEffect(() => {
-    if (isModelLoaded && !isScanning && !recognizedUser) {
-      const interval = setInterval(handleScan, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [isModelLoaded, isScanning, recognizedUser, handleScan]);
+    if (!isModelLoaded || !isCameraReady || isScanning || recognizedUser) return;
+
+    const interval = setInterval(() => handleScan(), SCAN_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [isModelLoaded, isCameraReady, isScanning, recognizedUser, handleScan]);
 
   const handleReset = () => {
-    recognizedUserRef.current = null;
     setRecognizedUser(null);
     setMessage('System ready. Please position your face in the camera.');
     setMessageType('info');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Staff Attendance</h1>
-          <p className="text-blue-300 text-lg">
-            {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
-          <p className="text-5xl font-bold text-white mt-2">
-            {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+    <div className="flex min-h-screen flex-col bg-paper">
+      {/* Institutional header */}
+      <header className="bg-navy-950">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-4">
+          <Seal className="h-12 w-10 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-lg text-white sm:text-xl">Staff Attendance System</h1>
+            <p className="text-xs tracking-wide text-gold-300 sm:text-sm">
+              College of Sciences, Technology and Engineering
+            </p>
+          </div>
+          <a
+            href="/login"
+            className="ml-auto hidden rounded-md border border-navy-600 px-4 py-2 text-sm font-medium text-navy-100 transition-colors hover:border-gold-400 hover:text-gold-200 sm:inline-block"
+          >
+            Admin Login
+          </a>
+        </div>
+        <div className="h-1 bg-gradient-to-r from-gold-600 via-gold-400 to-gold-600" />
+      </header>
+
+      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col px-5 py-8">
+        {/* Kiosk heading */}
+        <div className="mb-6 text-center">
+          <h2 className="text-3xl text-navy-900 sm:text-4xl">Face Time Attendance</h2>
+          <p className="mt-1 text-sm text-navy-500">
+            Look directly into the camera to record your time in and time out.
           </p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-2xl">
-          <div className="relative mb-6">
-            <div className={`rounded-xl overflow-hidden ${isModelLoaded ? 'ring-4 ring-green-500' : 'ring-4 ring-yellow-500'} ring-opacity-50`}>
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                screenshotFormat="image/jpeg"
-                className="w-full"
-                videoConstraints={{
-                  width: 640,
-                  height: 480,
-                  facingMode: 'user',
-                }}
-              />
-              <canvas
-                ref={canvasRef}
-                className="absolute top-0 left-0 w-full h-full pointer-events-none"
-              />
-            </div>
-            
-            {recognizedUser && (
-              <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center rounded-xl">
-                <div className="bg-white rounded-lg p-4 text-center">
-                  <svg className="w-12 h-12 text-green-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <p className="text-xl font-bold text-gray-800">{recognizedUser.name}</p>
-                  <p className="text-gray-500">{recognizedUser.role}</p>
+        {/* Live clock */}
+        <div className="mb-6 flex items-center justify-center gap-6 border-y border-gold-200/60 py-3">
+          <div className="text-center">
+            <p className="font-display text-2xl text-navy-900 tabular-nums sm:text-3xl">
+              {currentTime.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </p>
+          </div>
+          <div className="h-8 w-px bg-navy-200" />
+          <div className="text-center">
+            <p className="font-display text-sm text-navy-700 sm:text-base">
+              {currentTime.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+        </div>
+
+        {/* Scanner card */}
+        <div className="card overflow-hidden">
+          <div className="border-b border-navy-100 bg-navy-50/60 px-5 py-3">
+            <p className="font-display text-sm font-semibold tracking-wide text-navy-900">
+              Attendance Scanner
+            </p>
+          </div>
+
+          <div className="p-5">
+            <div className="relative mx-auto max-w-md">
+              <div className="rounded-lg border-2 border-navy-800 p-1.5 shadow-lg">
+                <div className="relative overflow-hidden rounded">
+                  <Webcam
+                    ref={webcamRef}
+                    audio={false}
+                    screenshotFormat="image/jpeg"
+                    onUserMedia={handleUserMedia}
+                    onUserMediaError={handleUserMediaError}
+                    className="aspect-[4/3] w-full bg-navy-950 object-cover"
+                    videoConstraints={{
+                      width: 640,
+                      height: 480,
+                      facingMode: 'user',
+                    }}
+                  />
+
+                  {!isModelLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-navy-950/85">
+                      <span className="text-sm font-medium text-navy-100">
+                        Loading face recognition models…
+                      </span>
+                    </div>
+                  )}
+
+                  {isModelLoaded && !isCameraReady && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-navy-950/85">
+                      <span className="text-sm font-medium text-navy-100">
+                        Starting camera…
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Corner accents */}
+                  <span className="pointer-events-none absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-gold-400" />
+                  <span className="pointer-events-none absolute top-0 right-0 h-4 w-4 border-t-2 border-r-2 border-gold-400" />
+                  <span className="pointer-events-none absolute bottom-0 left-0 h-4 w-4 border-b-2 border-l-2 border-gold-400" />
+                  <span className="pointer-events-none absolute right-0 bottom-0 h-4 w-4 border-r-2 border-b-2 border-gold-400" />
+
+                  {recognizedUser && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-navy-950/70 backdrop-blur-[1px]">
+                      <div className="rounded-lg bg-white px-8 py-5 text-center shadow-xl ring-1 ring-gold-300">
+                        <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-green-100">
+                          <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <p className="font-display text-xl font-bold text-navy-900">{recognizedUser.name}</p>
+                        <p className="text-sm text-navy-500">{recognizedUser.role}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className={`text-center py-4 px-6 rounded-lg mb-6 ${
-            messageType === 'success' ? 'bg-green-500/20 text-green-300' :
-            messageType === 'error' ? 'bg-red-500/20 text-red-300' :
-            'bg-blue-500/20 text-blue-300'
-          }`}>
-            <p className="text-lg">{message}</p>
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={handleScan}
-              disabled={!isModelLoaded || isScanning}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-semibold py-4 rounded-xl transition flex items-center justify-center gap-2"
+            {/* Message banner */}
+            <div
+              className={`mt-5 rounded-md border px-4 py-3 text-center text-sm font-medium ${
+                messageType === 'success'
+                  ? 'border-green-200 bg-green-50 text-green-800'
+                  : messageType === 'error'
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : 'border-navy-100 bg-navy-50 text-navy-700'
+              }`}
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              {isScanning ? 'Scanning...' : 'Scan Now'}
-            </button>
+              {message || 'System ready. Please position your face in the camera.'}
+            </div>
 
-            {recognizedUser && (
+            <div className="mt-5 flex gap-3">
               <button
-                onClick={handleReset}
-                className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-xl transition"
+                type="button"
+                onClick={handleScan}
+                disabled={isScanning || !isModelLoaded || !isCameraReady}
+                className="btn-gold flex-1 py-3 text-base"
               >
-                Reset
+                {isScanning ? 'Scanning…' : 'Scan Now'}
               </button>
-            )}
+
+              {recognizedUser && (
+                <button type="button" onClick={handleReset} className="btn-outline py-3">
+                  Reset
+                </button>
+              )}
+            </div>
           </div>
         </div>
+      </main>
 
-        <p className="text-center text-gray-400 text-sm mt-6">
-          Need help? <a href="/login" className="text-blue-400 hover:underline">Admin Login</a>
-        </p>
-      </div>
+      <footer className="border-t border-navy-100">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-1 px-5 py-5 text-center">
+          <p className="text-xs text-navy-500">
+            This terminal is monitored by the Office of the Registrar.
+          </p>
+          <p className="text-xs text-gray-400">
+            Need assistance? Contact the IT Services Office.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
