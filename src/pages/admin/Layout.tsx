@@ -36,10 +36,12 @@ export default function Layout() {
             <div className="flex min-w-0 items-center gap-3">
               {isSidebarOpen && (
                 <>
-                  <Seal className="h-10 w-8 shrink-0" />
+                  <Seal className="h-10 w-10 shrink-0" />
                   <div className="min-w-0">
-                    <h1 className="truncate text-sm text-white">College Staff AMS</h1>
-                    <p className="truncate text-[11px] text-gold-300">Administrative Console</p>
+                    <h1 className="truncate text-sm text-white">SJCBI Staff AMS</h1>
+                    <p className="truncate text-[11px] text-gold-300">
+                      Saint Joseph College of Baggao
+                    </p>
                   </div>
                 </>
               )}

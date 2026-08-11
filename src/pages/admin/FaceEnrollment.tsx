@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import * as faceapi from 'face-api.js';
 import api from '../../lib/api';
+import { loadFaceModels, detectFaceDescriptor, warmUpDetection } from '../../lib/faceApi';
 
-const MODEL_URL = '/models';
 const AUTO_SCAN_INTERVAL_MS = 400;
 const STABLE_FRAMES_REQUIRED = 3;
 const MANUAL_RETRIES = 10;
@@ -30,9 +29,7 @@ export default function FaceEnrollment() {
 
     const loadModels = async () => {
       try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        await loadFaceModels();
         if (!cancelled) setIsModelLoaded(true);
       } catch (error) {
         console.error('Error loading models:', error);
@@ -62,33 +59,17 @@ export default function FaceEnrollment() {
     setCameraError(detail || 'Unable to access camera. Please check permissions.');
   }, []);
 
-  const isVideoReady = useCallback(() => {
-    const video = webcamRef.current?.video;
-    return !!video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && !video.paused;
-  }, []);
-
   // Runs a single detection pass. Returns the 128-dim descriptor or null.
   const detectDescriptor = useCallback(async (): Promise<number[] | null> => {
-    const video = webcamRef.current?.video;
-    if (!video) return null;
+    return detectFaceDescriptor(webcamRef.current?.video);
+  }, []);
 
-    for (let i = 0; i < 6; i++) {
-      if (isVideoReady()) break;
-      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    }
-    if (!isVideoReady()) return null;
-
-    try {
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      return detection ? Array.from(detection.descriptor) : null;
-    } catch (error) {
-      console.error('Face detection error:', error);
-      return null;
-    }
-  }, [isVideoReady]);
+  // Once the camera is live, run one throwaway detection so tfjs compiles its
+  // kernels up front and the first capture is fast.
+  useEffect(() => {
+    if (!isModelLoaded || !isCameraReady) return;
+    warmUpDetection(webcamRef.current?.video);
+  }, [isModelLoaded, isCameraReady]);
 
   const registerUser = useCallback(
     async (descriptor: number[]) => {

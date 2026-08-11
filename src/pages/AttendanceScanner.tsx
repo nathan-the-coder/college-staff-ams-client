@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import * as faceapi from 'face-api.js';
 import axios from 'axios';
 import api from '../lib/api';
 import Seal from '../components/Seal';
+import { loadFaceModels, detectFaceDescriptor, warmUpDetection } from '../lib/faceApi';
 
-const MODEL_URL = '/models';
 const SCAN_INTERVAL_MS = 3000;
 const DETECT_RETRIES = 4;
 const RETRY_DELAY_MS = 250;
@@ -42,9 +41,7 @@ export default function AttendanceScanner() {
 
     const loadModels = async () => {
       try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        await loadFaceModels();
         if (!cancelled) setIsModelLoaded(true);
       } catch (error) {
         console.error('Error loading face models:', error);
@@ -73,34 +70,18 @@ export default function AttendanceScanner() {
     setMessageType('error');
   }, []);
 
-  const isVideoReady = useCallback(() => {
-    const video = webcamRef.current?.video;
-    return !!video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && !video.paused;
-  }, []);
-
   // Single detection pass: waits for the stream to be decodable, then returns
   // the 128-dim descriptor or null (transient/black frames return null).
   const detectDescriptor = useCallback(async (): Promise<number[] | null> => {
-    const video = webcamRef.current?.video;
-    if (!video) return null;
+    return detectFaceDescriptor(webcamRef.current?.video);
+  }, []);
 
-    for (let i = 0; i < 6; i++) {
-      if (isVideoReady()) break;
-      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    }
-    if (!isVideoReady()) return null;
-
-    try {
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      return detection ? Array.from(detection.descriptor) : null;
-    } catch (error) {
-      console.error('Face detection error:', error);
-      return null;
-    }
-  }, [isVideoReady]);
+  // Once the camera is live, run one throwaway detection so tfjs compiles its
+  // kernels up front and the first real scan is fast.
+  useEffect(() => {
+    if (!isModelLoaded || !isCameraReady) return;
+    warmUpDetection(webcamRef.current?.video);
+  }, [isModelLoaded, isCameraReady]);
 
   const sendFrameToBackend = useCallback(async (): Promise<CheckResult | null> => {
     if (!isModelLoaded) return null;
@@ -156,7 +137,14 @@ export default function AttendanceScanner() {
     } catch (error) {
       let errorMessage = 'Error processing. Please try again.';
       if (axios.isAxiosError(error)) {
-        errorMessage = error.response?.data?.message || errorMessage;
+        if (error.response) {
+          errorMessage =
+            error.response.data?.message ||
+            `Server error (${error.response.status}). Please wait a moment and try again.`;
+        } else {
+          errorMessage =
+            'Cannot reach the attendance server. Please check the connection and try again.';
+        }
       }
       setMessage(errorMessage);
       setMessageType('error');
@@ -184,16 +172,16 @@ export default function AttendanceScanner() {
       {/* Institutional header */}
       <header className="bg-navy-950">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-4">
-          <Seal className="h-12 w-10 shrink-0" />
+          <Seal className="h-12 w-12 shrink-0" />
           <div className="min-w-0">
             <h1 className="text-lg text-white sm:text-xl">Staff Attendance System</h1>
             <p className="text-xs tracking-wide text-gold-300 sm:text-sm">
-              For All Faculty and Staff
+              Saint Joseph College of Baggao · For All Faculty and Staff
             </p>
           </div>
           <a
             href="/login"
-            className="ml-auto hidden rounded-md border border-navy-600 px-4 py-2 text-sm font-medium text-navy-100 transition-colors hover:border-gold-400 hover:text-gold-200 sm:inline-block"
+            className="ml-auto rounded-md border border-navy-600 px-4 py-2 text-sm font-medium text-navy-100 transition-colors hover:border-gold-400 hover:text-gold-200"
           >
             Admin Login
           </a>
@@ -333,12 +321,30 @@ export default function AttendanceScanner() {
       </main>
 
       <footer className="border-t border-navy-100">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-1 px-5 py-5 text-center">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 px-5 py-6 text-center">
+          <div className="flex items-center gap-3">
+            <img
+              src="/sjcb_logo.png"
+              alt="Saint Joseph's College of Baggao, Inc."
+              className="h-10 w-10 rounded-full object-contain"
+            />
+            <div className="text-left">
+              <p className="text-sm font-semibold text-navy-900">
+                Saint Joseph&apos;s College of Baggao, Inc.
+              </p>
+              <p className="text-[11px] text-navy-500">
+                Tuguegarao Archdiocesan Schools&apos; System
+              </p>
+            </div>
+          </div>
           <p className="text-xs text-navy-500">
             This terminal is monitored by the Office of the Registrar.
           </p>
           <p className="text-xs text-gray-400">
-            Need assistance? Contact the IT Services Office.
+            Need assistance? Contact the IT Services Office.&nbsp;
+            <a href="/login" className="text-gold-600 underline underline-offset-2 hover:text-gold-700">
+              Staff / Admin Login
+            </a>
           </p>
         </div>
       </footer>

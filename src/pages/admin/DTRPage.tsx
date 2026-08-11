@@ -159,6 +159,9 @@ export default function DTRPage() {
             .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #253d04; padding-bottom: 10px; }
             .header h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 5px; }
             .header p { font-size: 14px; margin-bottom: 3px; }
+            .school-mark { display: inline-block; margin-bottom: 6px; }
+            .school-mark img { width: 56px; height: 56px; border-radius: 50%; object-fit: contain; }
+            .school-name { font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
             table { width: 100%; border-collapse: collapse; margin-top: 15px; }
             th, td { border: 1px solid #253d04; padding: 8px; text-align: left; font-size: 12px; }
             th { background: #f3ead0; }
@@ -211,6 +214,8 @@ export default function DTRPage() {
           .print-only { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
         }
+        .school-mark img { width: 56px; height: 56px; border-radius: 50%; object-fit: contain; }
+        .school-name { font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
       `}</style>
 
       <div className="no-print mb-8">
@@ -297,7 +302,12 @@ export default function DTRPage() {
 
       <div ref={printRef} className="card print-only overflow-hidden p-6">
         <div className="header">
-          <h1 className="font-display text-xl text-navy-900">ATTENDANCE RECORD</h1>
+          <span className="school-mark">
+            <img src="/sjcb_logo.png" alt="" />
+          </span>
+          <h1 className="school-name">SAINT JOSEPH&apos;S COLLEGE OF BAGGAO, INC.</h1>
+          <p className="text-sm text-navy-500">Staff Attendance System · Attendance Record</p>
+          <h1 className="font-display text-xl text-navy-900">{getSelectedUserName()}</h1>
           <p className="font-display text-lg font-semibold text-navy-900">{getSelectedUserName()}</p>
           <p className="text-sm text-navy-500">
             Position: {selectedUser ? users.find((u) => u._id === selectedUser)?.role : 'All Staff'}

@@ -48,10 +48,12 @@ export default function Login() {
         <div className="card overflow-hidden">
           <div className="bg-navy-900 px-8 py-8 text-center">
             <div className="mx-auto mb-4 flex items-center justify-center">
-              <Seal className="h-16 w-[3.2rem]" />
+              <Seal className="h-16 w-16" />
             </div>
             <h1 className="text-2xl text-white">Staff Attendance System</h1>
-            <p className="mt-1 text-sm text-gold-300">Administrative Portal</p>
+            <p className="mt-1 text-sm text-gold-300">
+              Saint Joseph College of Baggao · Administrative Portal
+            </p>
           </div>
 
           <div className="px-8 py-8">
@@ -105,11 +107,21 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="mt-6 text-center">
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/sjcb_logo.png"
+              alt="Saint Joseph's College of Baggao, Inc."
+              className="h-8 w-8 rounded-full object-contain"
+            />
+            <p className="text-xs text-navy-300">
+              Saint Joseph&apos;s College of Baggao, Inc.
+            </p>
+          </div>
           <a href="/" className="text-sm text-navy-300 transition-colors hover:text-gold-200">
             ← Back to attendance scanner
           </a>
-        </p>
+        </div>
       </div>
     </div>
   );
