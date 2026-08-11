@@ -53,30 +53,66 @@ function isVideoReady(
   );
 }
 
+export interface FaceDetectionResult {
+  descriptor: number[] | null;
+  box: { x: number; y: number; width: number; height: number } | null;
+  faceCount: number;
+}
+
+// Runs a detection pass and returns the descriptor, bounding box, and face count.
+export async function detectFaceWithBox(
+  video: HTMLVideoElement | null | undefined,
+  waitMs = 1500
+): Promise<FaceDetectionResult> {
+  if (!video) return { descriptor: null, box: null, faceCount: 0 };
+
+  const deadline = Date.now() + waitMs;
+  while (!isVideoReady(video) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!isVideoReady(video)) return { descriptor: null, box: null, faceCount: 0 };
+
+  try {
+    const detections = await faceapi
+      .detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+      .withFaceLandmarks()
+      .withFaceDescriptors();
+
+    if (!detections || detections.length === 0) {
+      return { descriptor: null, box: null, faceCount: 0 };
+    }
+
+    const sorted = [...detections].sort(
+      (a, b) =>
+        b.detection.box.width * b.detection.box.height -
+        a.detection.box.width * a.detection.box.height
+    );
+    const primary = sorted[0];
+
+    return {
+      descriptor: Array.from(primary.descriptor),
+      box: {
+        x: primary.detection.box.x,
+        y: primary.detection.box.y,
+        width: primary.detection.box.width,
+        height: primary.detection.box.height,
+      },
+      faceCount: detections.length,
+    };
+  } catch (error) {
+    console.error('Face detection with box error:', error);
+    return { descriptor: null, box: null, faceCount: 0 };
+  }
+}
+
 // Runs a single detection pass and returns the 128-dim descriptor, or null if
 // no face is present (or the stream is not yet decodable).
 export async function detectFaceDescriptor(
   video: HTMLVideoElement | null | undefined,
   waitMs = 1500
 ): Promise<number[] | null> {
-  if (!video) return null;
-
-  const deadline = Date.now() + waitMs;
-  while (!isVideoReady(video) && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  if (!isVideoReady(video)) return null;
-
-  try {
-    const detection = await faceapi
-      .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
-      .withFaceLandmarks()
-      .withFaceDescriptor();
-    return detection ? Array.from(detection.descriptor) : null;
-  } catch (error) {
-    console.error('Face detection error:', error);
-    return null;
-  }
+  const result = await detectFaceWithBox(video, waitMs);
+  return result.descriptor;
 }
 
 // Runs one throwaway detection once the camera is live so tfjs compiles its
@@ -90,3 +126,4 @@ export async function warmUpDetection(
     // best-effort only
   }
 }
+

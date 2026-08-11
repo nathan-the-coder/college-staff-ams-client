@@ -5,6 +5,8 @@ interface User {
   _id: string;
   name: string;
   role: string;
+  subject?: string;
+  teachingSchedule?: string;
 }
 
 export default function UserManagement() {
@@ -13,6 +15,8 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<'Instructor' | 'Staff'>('Instructor');
+  const [editSubject, setEditSubject] = useState('');
+  const [editTeachingSchedule, setEditTeachingSchedule] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
@@ -51,6 +55,8 @@ export default function UserManagement() {
     setEditingUser(user);
     setEditName(user.name);
     setEditRole(user.role as 'Instructor' | 'Staff');
+    setEditSubject(user.subject || '');
+    setEditTeachingSchedule(user.teachingSchedule || '');
   };
 
   const handleSave = async () => {
@@ -64,6 +70,8 @@ export default function UserManagement() {
       await api.put(`/users/${editingUser._id}`, {
         name: editName.trim(),
         role: editRole,
+        subject: editRole === 'Instructor' ? editSubject.trim() : '',
+        teachingSchedule: editRole === 'Instructor' ? editTeachingSchedule.trim() : '',
       });
       setEditingUser(null);
       setNotice({ kind: 'success', text: 'User updated successfully.' });
@@ -140,13 +148,14 @@ export default function UserManagement() {
               <tr>
                 <th className="table-th">Name</th>
                 <th className="table-th">Role</th>
+                <th className="table-th">Subject / Schedule</th>
                 <th className="table-th text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-navy-400">
+                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-navy-400">
                     Loading…
                   </td>
                 </tr>
@@ -172,6 +181,16 @@ export default function UserManagement() {
                         {user.role}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-xs text-navy-600">
+                      {user.role === 'Instructor' && (user.subject || user.teachingSchedule) ? (
+                        <div>
+                          {user.subject && <p className="font-semibold text-navy-900">{user.subject}</p>}
+                          {user.teachingSchedule && <p className="text-navy-500">{user.teachingSchedule}</p>}
+                        </div>
+                      ) : (
+                        <span className="text-navy-300">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
                         <button type="button" onClick={() => handleEdit(user)} className="btn-outline px-3 py-1.5 text-xs">
@@ -186,7 +205,7 @@ export default function UserManagement() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-navy-400">
+                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-navy-400">
                     No users found
                   </td>
                 </tr>
@@ -200,9 +219,9 @@ export default function UserManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/50 p-4">
           <div className="card w-full max-w-md">
             <div className="border-b border-navy-100 px-6 py-4">
-              <h2 className="text-lg text-navy-900">Edit User</h2>
+              <h2 className="text-lg text-navy-900 font-bold">Edit Staff Member</h2>
             </div>
-            <div className="space-y-5 px-6 py-6">
+            <div className="space-y-4 px-6 py-6">
               <div>
                 <label htmlFor="edit-name" className="label">
                   Name
@@ -229,6 +248,37 @@ export default function UserManagement() {
                   <option value="Staff">Staff</option>
                 </select>
               </div>
+
+              {editRole === 'Instructor' && (
+                <>
+                  <div>
+                    <label htmlFor="edit-subject" className="label">
+                      Subject Taught
+                    </label>
+                    <input
+                      id="edit-subject"
+                      type="text"
+                      placeholder="e.g. IT 101 - Web Development"
+                      value={editSubject}
+                      onChange={(e) => setEditSubject(e.target.value)}
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-schedule" className="label">
+                      Teaching Schedule (Days &amp; Time)
+                    </label>
+                    <input
+                      id="edit-schedule"
+                      type="text"
+                      placeholder="e.g. Mon/Wed/Fri 08:00 AM - 10:00 AM"
+                      value={editTeachingSchedule}
+                      onChange={(e) => setEditTeachingSchedule(e.target.value)}
+                      className="input"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex gap-2 border-t border-navy-100 px-6 py-4">
               <button type="button" onClick={handleSave} className="btn-primary flex-1">

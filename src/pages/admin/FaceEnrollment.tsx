@@ -8,6 +8,31 @@ const STABLE_FRAMES_REQUIRED = 3;
 const MANUAL_RETRIES = 10;
 const RETRY_DELAY_MS = 250;
 
+const CLASS_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatTime12h(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+function composeTeachingSchedule(days: string[], start: string, end: string): string {
+  const dayPart = CLASS_DAYS.filter((d) => days.includes(d)).join('/');
+  const hasStart = Boolean(start);
+  const hasEnd = Boolean(end);
+  const timePart = hasStart && hasEnd
+    ? `${formatTime12h(start)} - ${formatTime12h(end)}`
+    : hasStart
+      ? formatTime12h(start)
+      : hasEnd
+        ? `until ${formatTime12h(end)}`
+        : '';
+  if (!dayPart && !timePart) return '';
+  return dayPart && timePart ? `${dayPart} ${timePart}` : dayPart || timePart;
+}
+
 export default function FaceEnrollment() {
   const webcamRef = useRef<Webcam>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
@@ -18,6 +43,10 @@ export default function FaceEnrollment() {
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'Instructor' | 'Staff'>('Instructor');
+  const [subject, setSubject] = useState('');
+  const [scheduleDays, setScheduleDays] = useState<string[]>([]);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [faceDetected, setFaceDetected] = useState(false);
 
   const stableFramesRef = useRef(0);
@@ -80,11 +109,18 @@ export default function FaceEnrollment() {
         await api.post('/users/register', {
           name: name.trim(),
           role,
+          subject: role === 'Instructor' ? subject.trim() : '',
+          teachingSchedule:
+            role === 'Instructor' ? composeTeachingSchedule(scheduleDays, startTime, endTime) : '',
           faceDescriptor: descriptor,
         });
         setMessage('User registered successfully!');
         setMessageType('success');
         setName('');
+        setSubject('');
+        setScheduleDays([]);
+        setStartTime('');
+        setEndTime('');
       } catch (error) {
         console.error('Registration error:', error);
         setMessage('Failed to register. Please try again.');
@@ -96,7 +132,7 @@ export default function FaceEnrollment() {
         setFaceDetected(false);
       }
     },
-    [name, role]
+    [name, role, subject, scheduleDays, startTime, endTime]
   );
 
   // Auto-capture: keep looking for a face and register automatically once it
@@ -275,6 +311,88 @@ export default function FaceEnrollment() {
                 <option value="Staff">Staff</option>
               </select>
             </div>
+
+            {role === 'Instructor' && (
+              <>
+                <div>
+                  <label htmlFor="enroll-subject" className="label">
+                    Subject Taught
+                  </label>
+                  <input
+                    id="enroll-subject"
+                    type="text"
+                    placeholder="e.g. IT 101 - Computer Programming"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="input"
+                  />
+                  <p className="mt-1 text-xs text-navy-400">Assigned course or subject code</p>
+                </div>
+
+                <div>
+                  <span className="label">Class Days</span>
+                  <div className="flex flex-wrap gap-2">
+                    {CLASS_DAYS.map((day) => {
+                      const selected = scheduleDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() =>
+                            setScheduleDays((prev) =>
+                              prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+                            )
+                          }
+                          aria-pressed={selected}
+                          className={`cursor-pointer rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                            selected
+                              ? 'border-navy-800 bg-navy-800 text-white'
+                              : 'border-navy-200 bg-white text-navy-700 hover:border-navy-400 hover:bg-navy-50'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-xs text-navy-400">Select the days this subject is taught</p>
+                </div>
+
+                <div>
+                  <span className="label">Class Time</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="enroll-start" className="label">
+                        Start Time
+                      </label>
+                      <input
+                        id="enroll-start"
+                        type="time"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="enroll-end" className="label">
+                        End Time
+                      </label>
+                      <input
+                        id="enroll-end"
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-2 rounded-md bg-navy-50 px-3 py-2 text-xs text-navy-600">
+                    <span className="font-semibold">Schedule preview: </span>
+                    {composeTeachingSchedule(scheduleDays, startTime, endTime) || 'Not set yet'}
+                  </p>
+                </div>
+              </>
+            )}
 
             <button
               type="button"

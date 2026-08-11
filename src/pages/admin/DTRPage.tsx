@@ -12,6 +12,7 @@ interface AttendanceRecord {
   userId: string;
   name: string;
   role: string;
+  session?: 'am' | 'pm';
   type: 'in' | 'out';
   isLate: boolean;
   timestamp: string;
@@ -19,8 +20,10 @@ interface AttendanceRecord {
 
 interface DailyRecord {
   date: string;
-  timeIn: string | null;
-  timeOut: string | null;
+  amIn: string | null;
+  amOut: string | null;
+  pmIn: string | null;
+  pmOut: string | null;
   hoursWorked: number;
   isLate: boolean;
   status: string;
@@ -91,27 +94,43 @@ export default function DTRPage() {
     });
 
     const result: DailyRecord[] = Object.entries(grouped).map(([date, dayRecords]) => {
-      const timeInRecord = dayRecords.find((r) => r.type === 'in');
-      const timeOutRecord = dayRecords.find((r) => r.type === 'out');
+      const getSession = (r: AttendanceRecord) => {
+        if (r.session) return r.session;
+        return new Date(r.timestamp).getHours() < 12 ? 'am' : 'pm';
+      };
+
+      const amInRecord = dayRecords.find((r) => getSession(r) === 'am' && r.type === 'in');
+      const amOutRecord = dayRecords.find((r) => getSession(r) === 'am' && r.type === 'out');
+      const pmInRecord = dayRecords.find((r) => getSession(r) === 'pm' && r.type === 'in');
+      const pmOutRecord = dayRecords.find((r) => getSession(r) === 'pm' && r.type === 'out');
 
       let hoursWorked = 0;
-      if (timeInRecord && timeOutRecord) {
-        const inTime = new Date(timeInRecord.timestamp).getTime();
-        const outTime = new Date(timeOutRecord.timestamp).getTime();
-        hoursWorked = Math.max((outTime - inTime) / (1000 * 60 * 60), 0);
+      if (amInRecord && amOutRecord) {
+        const inTime = new Date(amInRecord.timestamp).getTime();
+        const outTime = new Date(amOutRecord.timestamp).getTime();
+        hoursWorked += Math.max((outTime - inTime) / (1000 * 60 * 60), 0);
       }
+      if (pmInRecord && pmOutRecord) {
+        const inTime = new Date(pmInRecord.timestamp).getTime();
+        const outTime = new Date(pmOutRecord.timestamp).getTime();
+        hoursWorked += Math.max((outTime - inTime) / (1000 * 60 * 60), 0);
+      }
+
+      const formatT = (r?: AttendanceRecord) =>
+        r ? new Date(r.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null;
+
+      const hasAnyIn = !!(amInRecord || pmInRecord);
+      const isComplete = (amInRecord ? !!amOutRecord : true) && (pmInRecord ? !!pmOutRecord : true);
 
       return {
         date,
-        timeIn: timeInRecord
-          ? new Date(timeInRecord.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-          : null,
-        timeOut: timeOutRecord
-          ? new Date(timeOutRecord.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-          : null,
+        amIn: formatT(amInRecord),
+        amOut: formatT(amOutRecord),
+        pmIn: formatT(pmInRecord),
+        pmOut: formatT(pmOutRecord),
         hoursWorked: Math.round(hoursWorked * 100) / 100,
-        isLate: timeInRecord?.isLate || false,
-        status: timeInRecord ? (timeOutRecord ? 'Complete' : 'Incomplete') : 'No Record',
+        isLate: (amInRecord?.isLate || pmInRecord?.isLate) || false,
+        status: hasAnyIn ? (isComplete ? 'Complete' : 'Incomplete') : 'No Record',
       };
     });
 
@@ -123,13 +142,13 @@ export default function DTRPage() {
   }, [processedRecords]);
 
   const generateCSV = () => {
-    let csv = 'Date,Time In,Time Out,Hours Worked,Late,Status\n';
+    let csv = 'Date,AM In,AM Out,PM In,PM Out,Hours Worked,Late,Status\n';
 
     processedRecords.forEach((record) => {
-      csv += `${record.date},${record.timeIn || ''},${record.timeOut || ''},${record.hoursWorked},${record.isLate ? 'Yes' : 'No'},${record.status}\n`;
+      csv += `${record.date},${record.amIn || ''},${record.amOut || ''},${record.pmIn || ''},${record.pmOut || ''},${record.hoursWorked},${record.isLate ? 'Yes' : 'No'},${record.status}\n`;
     });
 
-    csv += `\nTotal Hours,${totalHours.toFixed(2)}\n`;
+    csv += `\nTotal Hours,,,,,${totalHours.toFixed(2)}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -155,7 +174,7 @@ export default function DTRPage() {
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: Georgia, 'Times New Roman', serif; padding: 20px; color: #253d04; }
-            .dtr-container { max-width: 800px; margin: 0 auto; }
+            .dtr-container { max-width: 850px; margin: 0 auto; }
             .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #253d04; padding-bottom: 10px; }
             .header h1 { font-size: 20px; letter-spacing: 1px; margin-bottom: 5px; }
             .header p { font-size: 14px; margin-bottom: 3px; }
@@ -163,11 +182,11 @@ export default function DTRPage() {
             .school-mark img { width: 56px; height: 56px; border-radius: 50%; object-fit: contain; }
             .school-name { font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
             table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #253d04; padding: 8px; text-align: left; font-size: 12px; }
-            th { background: #f3ead0; }
-            .text-center { text-align: center; }
+            th, td { border: 1px solid #253d04; padding: 6px 8px; text-align: center; font-size: 11px; }
+            th { background: #f3ead0; font-weight: bold; }
+            .text-left { text-align: left; }
             .late { color: #b91c1c; font-weight: bold; }
-            .footer { margin-top: 20px; display: flex; justify-content: space-between; }
+            .footer { margin-top: 30px; display: flex; justify-content: space-between; }
             .signature { width: 45%; }
             .signature-line { border-bottom: 1px solid #253d04; margin-top: 40px; }
             .signature p { font-size: 12px; }
@@ -219,8 +238,8 @@ export default function DTRPage() {
       `}</style>
 
       <div className="no-print mb-8">
-        <h1 className="text-3xl text-navy-900">Daily Time Record</h1>
-        <p className="mt-1 text-sm text-navy-500">Generate and export staff attendance records</p>
+        <h1 className="text-3xl text-navy-900 font-bold">Daily Time Record (DTR)</h1>
+        <p className="mt-1 text-sm text-navy-500">Generate, print, and export 4-column institutional attendance reports</p>
       </div>
 
       <div className="no-print card mb-6 overflow-hidden">
@@ -271,7 +290,7 @@ export default function DTRPage() {
             />
           </div>
           <div className="flex items-end">
-            <button onClick={clearFilters} className="btn-outline w-full">
+            <button onClick={clearFilters} className="btn-outline w-full py-2.5">
               Clear Filters
             </button>
           </div>
@@ -301,42 +320,45 @@ export default function DTRPage() {
       </div>
 
       <div ref={printRef} className="card print-only overflow-hidden p-6">
-        <div className="header">
-          <span className="school-mark">
-            <img src="/sjcb_logo.png" alt="" />
+        <div className="header text-center border-b-2 border-navy-950 pb-4 mb-4">
+          <span className="school-mark mb-2 inline-block">
+            <img src="/sjcb_logo.png" alt="SJCB Logo" className="mx-auto h-16 w-16 rounded-full object-contain" />
           </span>
-          <h1 className="school-name">SAINT JOSEPH&apos;S COLLEGE OF BAGGAO, INC.</h1>
-          <p className="text-sm text-navy-500">Staff Attendance System · Attendance Record</p>
-          <h1 className="font-display text-xl text-navy-900">{getSelectedUserName()}</h1>
-          <p className="font-display text-lg font-semibold text-navy-900">{getSelectedUserName()}</p>
-          <p className="text-sm text-navy-500">
-            Position: {selectedUser ? users.find((u) => u._id === selectedUser)?.role : 'All Staff'}
-          </p>
-          <p className="text-sm text-navy-500">Period: {formatDateRange()}</p>
+          <h1 className="school-name font-display text-lg font-bold tracking-wider text-navy-950">SAINT JOSEPH&apos;S COLLEGE OF BAGGAO, INC.</h1>
+          <p className="text-xs font-semibold text-gold-700 tracking-wide">DAILY TIME RECORD (CIVIL SERVICE FORM NO. 48)</p>
+          <div className="mt-3">
+            <p className="font-display text-xl font-bold text-navy-900">{getSelectedUserName()}</p>
+            <p className="text-xs text-navy-600 font-medium">
+              Position: {selectedUser ? users.find((u) => u._id === selectedUser)?.role : 'All Faculty & Staff'}
+            </p>
+            <p className="text-xs text-navy-500 mt-0.5">Period: {formatDateRange()}</p>
+          </div>
         </div>
 
         {isLoading ? (
-          <div className="p-6 text-center text-sm text-navy-400">Loading…</div>
+          <div className="p-6 text-center text-sm text-navy-400">Loading attendance data…</div>
         ) : processedRecords.length === 0 ? (
-          <div className="p-6 text-center text-sm text-navy-400">No records found</div>
+          <div className="p-6 text-center text-sm text-navy-400">No attendance records found for this period</div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-navy-100">
-                  <tr>
-                    <th className="table-th">Date</th>
-                    <th className="table-th text-center">Time In</th>
-                    <th className="table-th text-center">Time Out</th>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-navy-900 bg-navy-50/80">
+                    <th className="table-th text-left">Date</th>
+                    <th className="table-th text-center">AM IN</th>
+                    <th className="table-th text-center">AM OUT</th>
+                    <th className="table-th text-center">PM IN</th>
+                    <th className="table-th text-center">PM OUT</th>
                     <th className="table-th text-center">Hours</th>
                     <th className="table-th text-center">Late</th>
                     <th className="table-th text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-navy-50">
+                <tbody className="divide-y divide-navy-100">
                   {processedRecords.map((record, index) => (
                     <tr key={index} className="transition-colors hover:bg-navy-50/50">
-                      <td className="px-4 py-3 text-sm text-navy-900">
+                      <td className="px-4 py-2.5 text-xs font-medium text-navy-900 text-left whitespace-nowrap">
                         {new Date(record.date).toLocaleDateString('en-US', {
                           weekday: 'short',
                           month: 'short',
@@ -344,29 +366,35 @@ export default function DTRPage() {
                           year: 'numeric',
                         })}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm tabular-nums text-navy-700">
-                        {record.timeIn || '—'}
+                      <td className="px-3 py-2.5 text-center text-xs tabular-nums font-semibold text-emerald-800">
+                        {record.amIn || '—'}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm tabular-nums text-navy-700">
-                        {record.timeOut || '—'}
+                      <td className="px-3 py-2.5 text-center text-xs tabular-nums text-navy-700">
+                        {record.amOut || '—'}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm tabular-nums text-navy-700">
-                        {record.hoursWorked || '—'}
+                      <td className="px-3 py-2.5 text-center text-xs tabular-nums font-semibold text-indigo-800">
+                        {record.pmIn || '—'}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm">
+                      <td className="px-3 py-2.5 text-center text-xs tabular-nums text-navy-700">
+                        {record.pmOut || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-xs font-bold tabular-nums text-navy-900">
+                        {record.hoursWorked || '0'}
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-xs">
                         {record.isLate ? (
                           <span className="font-bold text-red-600">LATE</span>
                         ) : (
-                          <span className="text-green-600">—</span>
+                          <span className="text-navy-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2.5 text-center">
                         <span
-                          className={`badge ${
+                          className={`badge text-[10px] ${
                             record.status === 'Complete'
-                              ? 'bg-green-50 text-green-700'
+                              ? 'bg-green-100 text-green-800'
                               : record.status === 'Incomplete'
-                                ? 'bg-gold-100 text-gold-800'
+                                ? 'bg-amber-100 text-amber-800'
                                 : 'bg-red-50 text-red-700'
                           }`}
                         >
@@ -376,41 +404,41 @@ export default function DTRPage() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="border-t border-navy-100 bg-navy-50/60">
+                <tfoot className="border-t-2 border-navy-950 bg-navy-50/80">
                   <tr>
-                    <td className="px-4 py-3 text-sm font-bold text-navy-900" colSpan={3}>
-                      TOTAL HOURS
+                    <td className="px-4 py-3 text-xs font-bold text-navy-950 text-left" colSpan={5}>
+                      TOTAL HOURS WORKED
                     </td>
-                    <td className="px-4 py-3 text-center text-sm font-bold tabular-nums text-navy-900">
+                    <td className="px-3 py-3 text-center text-xs font-bold tabular-nums text-navy-950">
                       {totalHours.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3" colSpan={2} />
+                    <td className="px-3 py-3" colSpan={2} />
                   </tr>
                 </tfoot>
               </table>
             </div>
 
-            <div className="footer mt-10 flex justify-between">
-              <div className="w-[45%]">
-                <div className="border-b border-navy-900" style={{ marginTop: 40 }} />
-                <p className="mt-1 text-xs text-navy-500">Staff Signature</p>
+            <div className="footer mt-12 flex justify-between px-4">
+              <div className="w-[40%] text-center">
+                <div className="border-b border-navy-900 mt-10" />
+                <p className="mt-1.5 text-xs font-medium text-navy-800">Employee / Staff Signature</p>
               </div>
-              <div className="w-[45%]">
-                <div className="border-b border-navy-900" style={{ marginTop: 40 }} />
-                <p className="mt-1 text-xs text-navy-500">Principal / HR Signature</p>
+              <div className="w-[40%] text-center">
+                <div className="border-b border-navy-900 mt-10" />
+                <p className="mt-1.5 text-xs font-medium text-navy-800">In Charge / Registrar Signature</p>
               </div>
             </div>
 
-            <div className="mt-6 text-center text-xs text-navy-400">
-              <p>Generated on {new Date().toLocaleDateString()}</p>
+            <div className="mt-8 text-center text-[10px] text-navy-400">
+              <p>Saint Joseph&apos;s College of Baggao, Inc. · Official Daily Time Record Document · Generated {new Date().toLocaleDateString()}</p>
             </div>
           </>
         )}
       </div>
 
-      <div className="no-print mt-4 text-sm text-navy-400">
-        Showing {processedRecords.length} days with {records.length} records · Total Hours:{' '}
-        {totalHours.toFixed(2)}
+      <div className="no-print mt-4 text-xs font-medium text-navy-500">
+        Showing {processedRecords.length} days with {records.length} total scan entries · Aggregate Hours Worked:{' '}
+        <span className="font-bold text-navy-900">{totalHours.toFixed(2)} hrs</span>
       </div>
     </div>
   );

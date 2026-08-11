@@ -5,6 +5,7 @@ interface AttendanceRecord {
   _id: string;
   name: string;
   role: string;
+  session?: 'am' | 'pm';
   type: 'in' | 'out';
   timestamp: string;
 }
@@ -173,15 +174,23 @@ export default function UserReport() {
                       {record.role}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`badge ${
-                          record.type === 'in'
-                            ? 'bg-green-50 text-green-700'
-                            : 'bg-gold-100 text-gold-800'
-                        }`}
-                      >
-                        {record.type === 'in' ? 'Time In' : 'Time Out'}
-                      </span>
+                      {(() => {
+                        const sessionStr = record.session
+                          ? record.session.toUpperCase()
+                          : new Date(record.timestamp).getHours() < 12
+                            ? 'AM'
+                            : 'PM';
+                        const isIn = record.type === 'in';
+                        return (
+                          <span
+                            className={`badge ${
+                              isIn ? 'bg-green-100 text-green-800' : 'bg-indigo-100 text-indigo-800'
+                            }`}
+                          >
+                            {`${sessionStr} Time ${isIn ? 'In' : 'Out'}`}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-navy-600">
                       {formatDate(record.timestamp)}
