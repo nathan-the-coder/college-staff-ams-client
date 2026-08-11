@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+// Normalize the base URL: the Vercel dashboard env var historically pointed at
+// the bare backend domain (without /api), so append /api when it is missing.
+const rawBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const apiBase = rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/+$/, '')}/api`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: apiBase,
 });
 
 // Attach the JWT to every request. The token is stored by AuthProvider under
