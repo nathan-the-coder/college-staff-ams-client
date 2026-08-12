@@ -5,6 +5,7 @@ interface User {
   _id: string;
   name: string;
   role: string;
+  department?: string;
   subject?: string;
   teachingSchedule?: string;
 }
@@ -14,7 +15,8 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState<'Instructor' | 'Staff'>('Instructor');
+  const [editRole, setEditRole] = useState<'Teaching' | 'Non Teaching'>('Teaching');
+  const [editDepartment, setEditDepartment] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editTeachingSchedule, setEditTeachingSchedule] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +56,8 @@ export default function UserManagement() {
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setEditName(user.name);
-    setEditRole(user.role as 'Instructor' | 'Staff');
+    setEditRole(user.role as 'Teaching' | 'Non Teaching');
+    setEditDepartment(user.department || '');
     setEditSubject(user.subject || '');
     setEditTeachingSchedule(user.teachingSchedule || '');
   };
@@ -70,8 +73,9 @@ export default function UserManagement() {
       await api.put(`/users/${editingUser._id}`, {
         name: editName.trim(),
         role: editRole,
-        subject: editRole === 'Instructor' ? editSubject.trim() : '',
-        teachingSchedule: editRole === 'Instructor' ? editTeachingSchedule.trim() : '',
+        department: editDepartment.trim(),
+        subject: editRole === 'Teaching' ? editSubject.trim() : '',
+        teachingSchedule: editRole === 'Teaching' ? editTeachingSchedule.trim() : '',
       });
       setEditingUser(null);
       setNotice({ kind: 'success', text: 'User updated successfully.' });
@@ -148,6 +152,7 @@ export default function UserManagement() {
               <tr>
                 <th className="table-th">Name</th>
                 <th className="table-th">Role</th>
+                <th className="table-th">Department</th>
                 <th className="table-th">Subject / Schedule</th>
                 <th className="table-th text-right">Actions</th>
               </tr>
@@ -173,7 +178,7 @@ export default function UserManagement() {
                     <td className="px-6 py-4">
                       <span
                         className={`badge ${
-                          user.role === 'Instructor'
+                          user.role === 'Teaching'
                             ? 'bg-navy-100 text-navy-800'
                             : 'bg-gold-100 text-gold-800'
                         }`}
@@ -182,7 +187,10 @@ export default function UserManagement() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-xs text-navy-600">
-                      {user.role === 'Instructor' && (user.subject || user.teachingSchedule) ? (
+                      {user.department || <span className="text-navy-300">—</span>}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-navy-600">
+                      {user.role === 'Teaching' && (user.subject || user.teachingSchedule) ? (
                         <div>
                           {user.subject && <p className="font-semibold text-navy-900">{user.subject}</p>}
                           {user.teachingSchedule && <p className="text-navy-500">{user.teachingSchedule}</p>}
@@ -219,7 +227,7 @@ export default function UserManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/50 p-4">
           <div className="card w-full max-w-md">
             <div className="border-b border-navy-100 px-6 py-4">
-              <h2 className="text-lg text-navy-900 font-bold">Edit Staff Member</h2>
+              <h2 className="text-lg text-navy-900 font-bold">Edit Employee</h2>
             </div>
             <div className="space-y-4 px-6 py-6">
               <div>
@@ -241,15 +249,27 @@ export default function UserManagement() {
                 <select
                   id="edit-role"
                   value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as 'Instructor' | 'Staff')}
+                  onChange={(e) => setEditRole(e.target.value as 'Teaching' | 'Non Teaching')}
                   className="input"
                 >
-                  <option value="Instructor">Instructor</option>
-                  <option value="Staff">Staff</option>
+                  <option value="Teaching">Teaching</option>
+                  <option value="Non Teaching">Non Teaching</option>
                 </select>
               </div>
+              <div>
+                <label htmlFor="edit-department" className="label">
+                  Department / Office
+                </label>
+                <input
+                  id="edit-department"
+                  type="text"
+                  value={editDepartment}
+                  onChange={(e) => setEditDepartment(e.target.value)}
+                  className="input"
+                />
+              </div>
 
-              {editRole === 'Instructor' && (
+              {editRole === 'Teaching' && (
                 <>
                   <div>
                     <label htmlFor="edit-subject" className="label">

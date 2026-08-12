@@ -5,6 +5,7 @@ interface User {
   _id: string;
   name: string;
   role: string;
+  department?: string;
 }
 
 interface AttendanceRecord {
@@ -208,7 +209,7 @@ export default function DTRPage() {
   };
 
   const getSelectedUserName = () => {
-    if (!selectedUser) return 'All Staff';
+    if (!selectedUser) return 'All Employees';
     const user = users.find((u) => u._id === selectedUser);
     return user?.name || 'Unknown';
   };
@@ -249,7 +250,7 @@ export default function DTRPage() {
         <div className="grid grid-cols-1 gap-5 p-6 md:grid-cols-4">
           <div>
             <label htmlFor="dtr-user" className="label">
-              Staff Member
+              Employee
             </label>
             <select
               id="dtr-user"
@@ -257,7 +258,7 @@ export default function DTRPage() {
               onChange={(e) => setSelectedUser(e.target.value)}
               className="input"
             >
-              <option value="">All Staff</option>
+              <option value="">All Employees</option>
               {users.map((user) => (
                 <option key={user._id} value={user._id}>
                   {user.name}
@@ -329,8 +330,13 @@ export default function DTRPage() {
           <div className="mt-3">
             <p className="font-display text-xl font-bold text-navy-900">{getSelectedUserName()}</p>
             <p className="text-xs text-navy-600 font-medium">
-              Position: {selectedUser ? users.find((u) => u._id === selectedUser)?.role : 'All Faculty & Staff'}
+              Position: {selectedUser ? users.find((u) => u._id === selectedUser)?.role : 'All Employees'}
             </p>
+            {selectedUser && users.find((u) => u._id === selectedUser)?.department && (
+              <p className="text-xs text-navy-500">
+                Department: {users.find((u) => u._id === selectedUser)?.department}
+              </p>
+            )}
             <p className="text-xs text-navy-500 mt-0.5">Period: {formatDateRange()}</p>
           </div>
         </div>

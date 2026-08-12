@@ -282,7 +282,7 @@ export default function AttendanceScanner() {
       case 'pm_out':
         return 'PM OUT';
       default:
-        return 'Auto (Smart)';
+        return 'Auto (Time In)';
     }
   };
 

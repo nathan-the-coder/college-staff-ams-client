@@ -3,10 +3,20 @@ import Webcam from 'react-webcam';
 import api from '../../lib/api';
 import { loadFaceModels, detectFaceDescriptor, warmUpDetection } from '../../lib/faceApi';
 
-const AUTO_SCAN_INTERVAL_MS = 400;
-const STABLE_FRAMES_REQUIRED = 3;
 const MANUAL_RETRIES = 10;
 const RETRY_DELAY_MS = 250;
+
+const DEPARTMENT_SUGGESTIONS = [
+  'Basic Education (Elementary)',
+  'Basic Education (Junior High)',
+  'Senior High School',
+  'Registrar\'s Office',
+  'Accounting Office',
+  'Guidance Office',
+  'Administration',
+  'IT Services',
+  'Library',
+];
 
 const CLASS_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -42,16 +52,14 @@ export default function FaceEnrollment() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'Instructor' | 'Staff'>('Instructor');
+  const [role, setRole] = useState<'Teaching' | 'Non Teaching'>('Teaching');
+  const [department, setDepartment] = useState('');
   const [subject, setSubject] = useState('');
   const [scheduleDays, setScheduleDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [faceDetected, setFaceDetected] = useState(false);
 
-  const stableFramesRef = useRef(0);
   const registeringRef = useRef(false);
-  const detectionInProgressRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,14 +117,16 @@ export default function FaceEnrollment() {
         await api.post('/users/register', {
           name: name.trim(),
           role,
-          subject: role === 'Instructor' ? subject.trim() : '',
+          department: department.trim(),
+          subject: role === 'Teaching' ? subject.trim() : '',
           teachingSchedule:
-            role === 'Instructor' ? composeTeachingSchedule(scheduleDays, startTime, endTime) : '',
+            role === 'Teaching' ? composeTeachingSchedule(scheduleDays, startTime, endTime) : '',
           faceDescriptor: descriptor,
         });
         setMessage('User registered successfully!');
         setMessageType('success');
         setName('');
+        setDepartment('');
         setSubject('');
         setScheduleDays([]);
         setStartTime('');
@@ -128,51 +138,10 @@ export default function FaceEnrollment() {
       } finally {
         setIsRegistering(false);
         registeringRef.current = false;
-        stableFramesRef.current = 0;
-        setFaceDetected(false);
       }
     },
-    [name, role, subject, scheduleDays, startTime, endTime]
+    [name, role, department, subject, scheduleDays, startTime, endTime]
   );
-
-  // Auto-capture: keep looking for a face and register automatically once it
-  // has been detected for several consecutive frames (avoids flicker).
-  const runAutoDetection = useCallback(async () => {
-    if (!isModelLoaded || !isCameraReady || registeringRef.current || !name.trim()) {
-      return;
-    }
-    if (detectionInProgressRef.current) return;
-    detectionInProgressRef.current = true;
-
-    try {
-      const descriptor = await detectDescriptor();
-
-      if (descriptor) {
-        stableFramesRef.current += 1;
-        setFaceDetected(true);
-        if (stableFramesRef.current >= STABLE_FRAMES_REQUIRED) {
-          stableFramesRef.current = 0;
-          registeringRef.current = true;
-          await registerUser(descriptor);
-        }
-      } else {
-        stableFramesRef.current = 0;
-        setFaceDetected(false);
-      }
-    } finally {
-      detectionInProgressRef.current = false;
-    }
-  }, [isModelLoaded, isCameraReady, name, detectDescriptor, registerUser]);
-
-  useEffect(() => {
-    if (!isModelLoaded || !isCameraReady) return;
-
-    const interval = setInterval(() => {
-      runAutoDetection();
-    }, AUTO_SCAN_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [isModelLoaded, isCameraReady, runAutoDetection]);
 
   const handleManualCapture = async () => {
     if (registeringRef.current) return;
@@ -211,7 +180,7 @@ export default function FaceEnrollment() {
       <div className="mb-8">
         <h1 className="text-3xl text-navy-900">Face Enrollment</h1>
         <p className="mt-1 text-sm text-navy-500">
-          Enroll a new staff member&apos;s face for attendance scanning
+          Enroll a new employee&apos;s face for attendance scanning
         </p>
       </div>
 
@@ -228,7 +197,7 @@ export default function FaceEnrollment() {
                 screenshotFormat="image/jpeg"
                 onUserMedia={handleUserMedia}
                 onUserMediaError={handleUserMediaError}
-                className={`aspect-[4/3] w-full bg-navy-950 object-cover ${faceDetected ? 'ring-4 ring-green-400/70' : ''}`}
+                className="aspect-[4/3] w-full bg-navy-950 object-cover"
                 videoConstraints={{
                   width: 640,
                   height: 480,
@@ -245,22 +214,17 @@ export default function FaceEnrollment() {
                   <span className="text-sm font-medium text-navy-100">Starting camera…</span>
                 </div>
               )}
-              {isModelLoaded && isCameraReady && faceDetected && (
-                <div className="absolute inset-x-0 bottom-0 bg-green-600/85 px-3 py-2 text-center text-sm font-medium text-white">
-                  {isRegistering ? 'Registering…' : 'Face detected'}
-                </div>
-              )}
             </div>
             <p className="mt-4 text-xs leading-relaxed text-navy-400">
-              Hold still and look directly at the camera. Registration happens automatically once a
-              stable face is captured, or use the button below for a manual capture.
+              Position your face in the camera, then click &quot;Capture &amp; Register&quot; below. A
+              128-point facial signature is saved and used to match future attendance scans.
             </p>
           </div>
         </div>
 
         <div className="card self-start overflow-hidden">
           <div className="border-b border-navy-100 bg-navy-50/60 px-6 py-4">
-            <h2 className="font-display text-base font-semibold text-navy-900">Staff Details</h2>
+            <h2 className="font-display text-base font-semibold text-navy-900">Employee Details</h2>
           </div>
           <div className="space-y-5 p-6">
             {message && (
@@ -304,15 +268,36 @@ export default function FaceEnrollment() {
               <select
                 id="enroll-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'Instructor' | 'Staff')}
+                onChange={(e) => setRole(e.target.value as 'Teaching' | 'Non Teaching')}
                 className="input"
               >
-                <option value="Instructor">Instructor</option>
-                <option value="Staff">Staff</option>
+                <option value="Teaching">Teaching</option>
+                <option value="Non Teaching">Non Teaching</option>
               </select>
             </div>
 
-            {role === 'Instructor' && (
+            <div>
+              <label htmlFor="enroll-department" className="label">
+                Department / Office
+              </label>
+              <input
+                id="enroll-department"
+                type="text"
+                list="department-suggestions"
+                placeholder="e.g. Basic Education (Elementary)"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="input"
+              />
+              <datalist id="department-suggestions">
+                {DEPARTMENT_SUGGESTIONS.map((d) => (
+                  <option key={d} value={d} />
+                ))}
+              </datalist>
+              <p className="mt-1 text-xs text-navy-400">Department or office the employee belongs to</p>
+            </div>
+
+            {role === 'Teaching' && (
               <>
                 <div>
                   <label htmlFor="enroll-subject" className="label">
