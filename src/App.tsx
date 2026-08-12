@@ -8,6 +8,7 @@ import DTRPage from './pages/admin/DTRPage';
 import UserManagement from './pages/admin/UserManagement';
 import SettingsPage from './pages/admin/SettingsPage';
 import ChangePassword from './pages/admin/ChangePassword';
+import ManualAttendance from './pages/admin/ManualAttendance';
 import AdminLayout from './pages/admin/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthProvider';
@@ -26,6 +27,7 @@ function App() {
             <Route path="/users" element={<UserManagement />} />
             <Route path="/dtr" element={<DTRPage />} />
             <Route path="/reports" element={<UserReport />} />
+            <Route path="/manual-attendance" element={<ManualAttendance />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/change-password" element={<ChangePassword />} />
           </Route>
