@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import FaceEnrollment from './pages/admin/FaceEnrollment';
+import EnrollmentKiosk from './pages/EnrollmentKiosk';
 import Dashboard from './pages/admin/Dashboard';
 import AdminLogin from './pages/admin/Login';
 import AttendanceScanner from './pages/AttendanceScanner';
@@ -19,10 +19,10 @@ function App() {
         <Routes>
           <Route path="/" element={<AttendanceScanner />} />
           <Route path="/login" element={<AdminLogin />} />
-          
+          <Route path="/enroll" element={<EnrollmentKiosk />} />
+
           <Route element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/enroll" element={<FaceEnrollment />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/dtr" element={<DTRPage />} />
             <Route path="/reports" element={<UserReport />} />

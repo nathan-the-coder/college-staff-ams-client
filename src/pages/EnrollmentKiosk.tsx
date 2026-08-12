@@ -1,24 +1,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import api from '../../lib/api';
-import { loadFaceModels, detectFaceDescriptor, warmUpDetection } from '../../lib/faceApi';
+import api from '../lib/api';
+import Seal from '../components/Seal';
+import { loadFaceModels, detectFaceDescriptor, warmUpDetection } from '../lib/faceApi';
 
 const MANUAL_RETRIES = 10;
 const RETRY_DELAY_MS = 250;
 
-const DEPARTMENT_SUGGESTIONS = [
+const TEACHING_DEPARTMENTS = [
   'Basic Education (Elementary)',
   'Basic Education (Junior High)',
   'Senior High School',
-  'Registrar\'s Office',
+  'College Department',
+];
+
+const NON_TEACHING_OFFICES = [
+  "Registrar's Office",
   'Accounting Office',
   'Guidance Office',
   'Administration',
   'IT Services',
   'Library',
+  'Clinic / Health Office',
+  'Maintenance & Custodial',
 ];
 
 const CLASS_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const SESSION_KEY = 'enrollAuthorized';
 
 function formatTime12h(time: string): string {
   const [h, m] = time.split(':').map(Number);
@@ -43,8 +52,15 @@ function composeTeachingSchedule(days: string[], start: string, end: string): st
   return dayPart && timePart ? `${dayPart} ${timePart}` : dayPart || timePart;
 }
 
-export default function FaceEnrollment() {
+export default function EnrollmentKiosk() {
   const webcamRef = useRef<Webcam>(null);
+  const [isUnlocked, setIsUnlocked] = useState(
+    () => sessionStorage.getItem(SESSION_KEY) === '1'
+  );
+  const [enrollPassword, setEnrollPassword] = useState('');
+  const [unlockError, setUnlockError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -58,8 +74,14 @@ export default function FaceEnrollment() {
   const [scheduleDays, setScheduleDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const registeringRef = useRef(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,17 +118,45 @@ export default function FaceEnrollment() {
     setCameraError(detail || 'Unable to access camera. Please check permissions.');
   }, []);
 
-  // Runs a single detection pass. Returns the 128-dim descriptor or null.
   const detectDescriptor = useCallback(async (): Promise<number[] | null> => {
     return detectFaceDescriptor(webcamRef.current?.video);
   }, []);
 
-  // Once the camera is live, run one throwaway detection so tfjs compiles its
-  // kernels up front and the first capture is fast.
   useEffect(() => {
     if (!isModelLoaded || !isCameraReady) return;
     warmUpDetection(webcamRef.current?.video);
   }, [isModelLoaded, isCameraReady]);
+
+  const handleUnlock = async () => {
+    setIsVerifying(true);
+    setUnlockError('');
+    try {
+      const response = await api.post<{ valid: boolean; message?: string }>(
+        '/enrollment/verify',
+        { password: enrollPassword }
+      );
+      if (response.data.valid) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        setIsUnlocked(true);
+        setEnrollPassword('');
+      } else {
+        setUnlockError(response.data.message || 'Incorrect password');
+      }
+    } catch (error) {
+      console.error('Enrollment unlock error:', error);
+      setUnlockError('Cannot reach server. Please check your connection.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleLock = () => {
+    sessionStorage.removeItem(SESSION_KEY);
+    setIsUnlocked(false);
+    setEnrollPassword('');
+    setMessage('');
+    setMessageType('info');
+  };
 
   const registerUser = useCallback(
     async (descriptor: number[]) => {
@@ -123,7 +173,7 @@ export default function FaceEnrollment() {
             role === 'Teaching' ? composeTeachingSchedule(scheduleDays, startTime, endTime) : '',
           faceDescriptor: descriptor,
         });
-        setMessage('User registered successfully!');
+        setMessage('User registered successfully! You may enroll the next employee.');
         setMessageType('success');
         setName('');
         setDepartment('');
@@ -143,11 +193,11 @@ export default function FaceEnrollment() {
     [name, role, department, subject, scheduleDays, startTime, endTime]
   );
 
-  const handleManualCapture = async () => {
+  const handleCapture = async () => {
     if (registeringRef.current) return;
 
     if (!name.trim()) {
-      setMessage('Please enter a name first');
+      setMessage('Please enter the employee name first');
       setMessageType('error');
       return;
     }
@@ -164,7 +214,7 @@ export default function FaceEnrollment() {
     }
 
     if (!descriptor) {
-      setMessage('No face detected. Please position your face in the camera.');
+      setMessage('No face detected. Please position the face in the camera.');
       setMessageType('error');
       registeringRef.current = false;
       return;
@@ -175,13 +225,91 @@ export default function FaceEnrollment() {
 
   const canCapture = isModelLoaded && isCameraReady && !isRegistering;
 
-  return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl text-navy-900">Face Enrollment</h1>
-        <p className="mt-1 text-sm text-navy-500">
-          Enroll a new employee&apos;s face for attendance scanning
+  const lockCard = (
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-10">
+      <div className="w-full rounded-2xl border border-navy-200 bg-white p-8 text-center shadow-lg">
+        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-navy-950 text-gold-400 ring-8 ring-navy-100">
+          <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h2 className="font-display text-xl font-bold text-navy-950">Restricted Area</h2>
+        <p className="mx-auto mt-1.5 max-w-xs text-sm text-navy-500">
+          Face enrollment is locked. Enter the enrollment password shared by the school
+          administration to continue.
         </p>
+
+        {unlockError && (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {unlockError}
+          </div>
+        )}
+
+        <input
+          type="password"
+          value={enrollPassword}
+          onChange={(e) => setEnrollPassword(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleUnlock();
+          }}
+          placeholder="Enter enrollment password"
+          autoFocus
+          className="input mt-5 text-center text-lg tracking-widest"
+        />
+
+        <button
+          type="button"
+          onClick={handleUnlock}
+          disabled={isVerifying || !enrollPassword.trim()}
+          className="btn-gold mt-4 w-full py-3 text-base font-bold"
+        >
+          {isVerifying ? 'Verifying…' : 'Unlock Enrollment'}
+        </button>
+
+        <p className="mt-5 text-xs text-navy-400">
+          Forgot the password? Contact the Office of the Registrar.
+        </p>
+      </div>
+    </div>
+  );
+
+  const enrollmentForm = (
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6 sm:px-6">
+      <div className="mb-5 flex flex-col items-center justify-between gap-3 rounded-xl border border-gold-200/80 bg-white p-4 shadow-sm sm:flex-row">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-950 text-gold-400">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-display text-2xl font-bold text-navy-950 tabular-nums">
+              {currentTime.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </p>
+            <p className="text-xs font-medium text-navy-500">
+              {currentTime.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleLock}
+          className="flex items-center gap-2 rounded-md border border-navy-300 px-4 py-2 text-sm font-semibold text-navy-700 transition-colors hover:border-red-400 hover:text-red-700"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          Lock &amp; Exit
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -216,8 +344,9 @@ export default function FaceEnrollment() {
               )}
             </div>
             <p className="mt-4 text-xs leading-relaxed text-navy-400">
-              Position your face in the camera, then click &quot;Capture &amp; Register&quot; below. A
-              128-point facial signature is saved and used to match future attendance scans.
+              Position the employee&apos;s face in the camera, then click
+              &quot;Capture &amp; Register&quot;. A 128-point facial signature is saved and used to
+              match future attendance scans.
             </p>
           </div>
         </div>
@@ -262,39 +391,61 @@ export default function FaceEnrollment() {
             </div>
 
             <div>
-              <label htmlFor="enroll-role" className="label">
-                Role
-              </label>
-              <select
-                id="enroll-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as 'Teaching' | 'Non Teaching')}
-                className="input"
-              >
-                <option value="Teaching">Teaching</option>
-                <option value="Non Teaching">Non Teaching</option>
-              </select>
+              <span className="label">Role</span>
+              <div className="grid grid-cols-2 gap-3">
+                {(['Teaching', 'Non Teaching'] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      setRole(r);
+                      setDepartment('');
+                    }}
+                    aria-pressed={role === r}
+                    className={`cursor-pointer rounded-md border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                      role === r
+                        ? 'border-navy-800 bg-navy-800 text-white'
+                        : 'border-navy-200 bg-white text-navy-700 hover:border-navy-400 hover:bg-navy-50'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
               <label htmlFor="enroll-department" className="label">
-                Department / Office
+                {role === 'Teaching' ? 'Department' : 'Office'}
               </label>
               <input
                 id="enroll-department"
                 type="text"
-                list="department-suggestions"
-                placeholder="e.g. Basic Education (Elementary)"
+                list={role === 'Teaching' ? 'teaching-depts' : 'office-list'}
+                placeholder={
+                  role === 'Teaching'
+                    ? 'e.g. Basic Education (Elementary)'
+                    : "e.g. Registrar's Office"
+                }
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className="input"
               />
-              <datalist id="department-suggestions">
-                {DEPARTMENT_SUGGESTIONS.map((d) => (
+              <datalist id="teaching-depts">
+                {TEACHING_DEPARTMENTS.map((d) => (
                   <option key={d} value={d} />
                 ))}
               </datalist>
-              <p className="mt-1 text-xs text-navy-400">Department or office the employee belongs to</p>
+              <datalist id="office-list">
+                {NON_TEACHING_OFFICES.map((d) => (
+                  <option key={d} value={d} />
+                ))}
+              </datalist>
+              <p className="mt-1 text-xs text-navy-400">
+                {role === 'Teaching'
+                  ? 'School level or department the employee teaches under'
+                  : 'Office or unit the employee belongs to'}
+              </p>
             </div>
 
             {role === 'Teaching' && (
@@ -306,7 +457,7 @@ export default function FaceEnrollment() {
                   <input
                     id="enroll-subject"
                     type="text"
-                    placeholder="e.g. IT 101 - Computer Programming"
+                    placeholder="e.g. Mathematics 7"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     className="input"
@@ -381,15 +532,66 @@ export default function FaceEnrollment() {
 
             <button
               type="button"
-              onClick={handleManualCapture}
+              onClick={handleCapture}
               disabled={!canCapture}
-              className="btn-gold w-full py-3"
+              className="btn-gold w-full py-3 text-base font-bold"
             >
               {isRegistering ? 'Registering…' : 'Capture & Register'}
             </button>
           </div>
         </div>
       </div>
+    </main>
+  );
+
+  return (
+    <div className="flex min-h-screen flex-col bg-paper">
+      <header className="bg-navy-950">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-4">
+          <Seal className="h-12 w-12 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-lg text-white sm:text-xl font-bold tracking-wide">Face Enrollment Kiosk</h1>
+            <p className="text-xs tracking-wide text-gold-300 sm:text-sm">
+              Saint Joseph College of Baggao · Restricted Employee Registration
+            </p>
+          </div>
+          <a
+            href="/"
+            className="ml-auto flex shrink-0 items-center gap-2 rounded-md border border-navy-600 px-4 py-2 text-sm font-medium text-navy-100 transition-colors hover:border-gold-400 hover:text-gold-200"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3m10-11v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            Back to Scanner
+          </a>
+        </div>
+        <div className="h-1 bg-gradient-to-r from-gold-600 via-gold-400 to-gold-600" />
+      </header>
+
+      {isUnlocked ? enrollmentForm : lockCard}
+
+      <footer className="border-t border-navy-100 bg-white">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 px-5 py-6 text-center">
+          <div className="flex items-center gap-3">
+            <img
+              src="/sjcb_logo.png"
+              alt="Saint Joseph's College of Baggao, Inc."
+              className="h-10 w-10 rounded-full object-contain"
+            />
+            <div className="text-left">
+              <p className="text-sm font-semibold text-navy-900">
+                Saint Joseph&apos;s College of Baggao, Inc.
+              </p>
+              <p className="text-[11px] text-navy-500">
+                Tuguegarao Archdiocesan Schools&apos; System
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-navy-500">
+            This terminal is monitored by the Office of the Registrar.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

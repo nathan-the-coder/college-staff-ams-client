@@ -5,6 +5,7 @@ interface Settings {
   lateThreshold: string;
   workStartTime: string;
   workEndTime: string;
+  enrollPassword: string;
 }
 
 export default function SettingsPage() {
@@ -12,6 +13,7 @@ export default function SettingsPage() {
     lateThreshold: '08:00',
     workStartTime: '08:00',
     workEndTime: '17:00',
+    enrollPassword: 'sjcb2026',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -29,6 +31,7 @@ export default function SettingsPage() {
             lateThreshold: response.data.lateThreshold || '08:00',
             workStartTime: response.data.workStartTime || '08:00',
             workEndTime: response.data.workEndTime || '17:00',
+            enrollPassword: response.data.enrollPassword || 'sjcb2026',
           });
         }
       } catch (error) {
@@ -140,6 +143,32 @@ export default function SettingsPage() {
           >
             {isSaving ? 'Saving…' : 'Save Settings'}
           </button>
+        </div>
+      </div>
+
+      <div className="card mt-6 max-w-3xl overflow-hidden">
+        <div className="border-b border-navy-100 bg-navy-50/60 px-6 py-4">
+          <h2 className="font-display text-base font-semibold text-navy-900">
+            Enrollment Security
+          </h2>
+        </div>
+        <div className="p-6">
+          <div className="max-w-sm">
+            <label htmlFor="settings-enroll-password" className="label">
+              Face Enrollment Password
+            </label>
+            <input
+              id="settings-enroll-password"
+              type="text"
+              value={settings.enrollPassword}
+              onChange={(e) => setSettings({ ...settings, enrollPassword: e.target.value })}
+              className="input"
+            />
+            <p className="mt-1 text-sm text-navy-500">
+              Shared secret required to unlock the enrollment kiosk. Share only with employees
+              and the administration.
+            </p>
+          </div>
         </div>
       </div>
 
