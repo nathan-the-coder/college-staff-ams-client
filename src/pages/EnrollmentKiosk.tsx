@@ -28,6 +28,7 @@ const NON_TEACHING_OFFICES = [
 const CLASS_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const SESSION_KEY = 'enrollAuthorized';
+const PASSWORD_KEY = 'enrollPassword';
 
 function formatTime12h(time: string): string {
   const [h, m] = time.split(':').map(Number);
@@ -137,6 +138,7 @@ export default function EnrollmentKiosk() {
       );
       if (response.data.valid) {
         sessionStorage.setItem(SESSION_KEY, '1');
+        sessionStorage.setItem(PASSWORD_KEY, enrollPassword);
         setIsUnlocked(true);
         setEnrollPassword('');
       } else {
@@ -152,6 +154,7 @@ export default function EnrollmentKiosk() {
 
   const handleLock = () => {
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(PASSWORD_KEY);
     setIsUnlocked(false);
     setEnrollPassword('');
     setMessage('');
@@ -164,15 +167,23 @@ export default function EnrollmentKiosk() {
       setMessage('Registering…');
       setMessageType('info');
       try {
-        await api.post('/users/register', {
-          name: name.trim(),
-          role,
-          department: department.trim(),
-          subject: role === 'Teaching' ? subject.trim() : '',
-          teachingSchedule:
-            role === 'Teaching' ? composeTeachingSchedule(scheduleDays, startTime, endTime) : '',
-          faceDescriptor: descriptor,
-        });
+        const enrollPassword = sessionStorage.getItem(PASSWORD_KEY) || '';
+        const response = await api.post<{ success: boolean; message?: string }>(
+          '/enrollment/register',
+          {
+            password: enrollPassword,
+            name: name.trim(),
+            role,
+            department: department.trim(),
+            subject: role === 'Teaching' ? subject.trim() : '',
+            teachingSchedule:
+              role === 'Teaching' ? composeTeachingSchedule(scheduleDays, startTime, endTime) : '',
+            faceDescriptor: descriptor,
+          }
+        );
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Registration failed. Please try again.');
+        }
         setMessage('User registered successfully! You may enroll the next employee.');
         setMessageType('success');
         setName('');

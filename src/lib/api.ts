@@ -26,7 +26,9 @@ api.interceptors.response.use(
   (error) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       localStorage.removeItem('authToken');
-      if (window.location.pathname !== '/login') {
+      const path = window.location.pathname;
+      // Public pages must never bounce to the admin login screen.
+      if (path !== '/login' && path !== '/enroll') {
         window.location.href = '/login';
       }
     }
