@@ -59,6 +59,7 @@ export default function EnrollmentKiosk() {
     () => sessionStorage.getItem(SESSION_KEY) === '1'
   );
   const [enrollPassword, setEnrollPassword] = useState('');
+  const [showEnrollPassword, setShowEnrollPassword] = useState(false);
   const [unlockError, setUnlockError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -256,17 +257,37 @@ export default function EnrollmentKiosk() {
           </div>
         )}
 
-        <input
-          type="password"
-          value={enrollPassword}
-          onChange={(e) => setEnrollPassword(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleUnlock();
-          }}
-          placeholder="Enter enrollment password"
-          autoFocus
-          className="input mt-5 text-center text-lg tracking-widest"
-        />
+        <div className="relative mt-5">
+          <input
+            type={showEnrollPassword ? 'text' : 'password'}
+            value={enrollPassword}
+            onChange={(e) => setEnrollPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleUnlock();
+            }}
+            placeholder="Enter enrollment password"
+            autoFocus
+            className="input pr-11 text-center text-lg tracking-widest"
+          />
+          <button
+            type="button"
+            onClick={() => setShowEnrollPassword((v) => !v)}
+            tabIndex={-1}
+            aria-label={showEnrollPassword ? 'Hide password' : 'Show password'}
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-navy-400 transition-colors hover:text-navy-700"
+          >
+            {showEnrollPassword ? (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            )}
+          </button>
+        </div>
 
         <button
           type="button"
@@ -286,7 +307,7 @@ export default function EnrollmentKiosk() {
 
   const enrollmentForm = (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6 sm:px-6">
-      <div className="mb-5 flex flex-col items-center justify-between gap-3 rounded-xl border border-gold-200/80 bg-white p-4 shadow-sm sm:flex-row">
+      <div className="sticky top-[77px] z-20 mb-5 flex shrink-0 flex-col items-center justify-between gap-3 rounded-xl border border-gold-200/80 bg-white p-4 shadow-sm sm:top-[81px] sm:flex-row">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-navy-950 text-gold-400">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,19 +345,19 @@ export default function EnrollmentKiosk() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="card overflow-hidden">
+        <div className="card sticky top-[237px] z-10 self-start overflow-hidden sm:top-[193px]">
           <div className="border-b border-navy-100 bg-navy-50/60 px-6 py-4">
             <h2 className="font-display text-base font-semibold text-navy-900">Camera Preview</h2>
           </div>
           <div className="p-6">
-            <div className="relative overflow-hidden rounded-lg border-2 border-navy-800">
+            <div className="relative mx-auto aspect-[4/3] w-full max-w-[400px] overflow-hidden rounded-lg border-2 border-navy-800">
               <Webcam
                 ref={webcamRef}
                 audio={false}
                 screenshotFormat="image/jpeg"
                 onUserMedia={handleUserMedia}
                 onUserMediaError={handleUserMediaError}
-                className="aspect-[4/3] w-full bg-navy-950 object-cover"
+                className="absolute inset-0 h-full w-full bg-navy-950 object-cover"
                 videoConstraints={{
                   width: 640,
                   height: 480,
@@ -362,7 +383,7 @@ export default function EnrollmentKiosk() {
           </div>
         </div>
 
-        <div className="card self-start overflow-hidden">
+        <div className="card overflow-hidden">
           <div className="border-b border-navy-100 bg-navy-50/60 px-6 py-4">
             <h2 className="font-display text-base font-semibold text-navy-900">Employee Details</h2>
           </div>
@@ -557,7 +578,7 @@ export default function EnrollmentKiosk() {
 
   return (
     <div className="flex min-h-screen flex-col bg-paper">
-      <header className="bg-navy-950">
+      <header className="sticky top-0 z-30 bg-navy-950">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-4">
           <Seal className="h-12 w-12 shrink-0" />
           <div className="min-w-0">

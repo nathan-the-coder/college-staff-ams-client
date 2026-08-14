@@ -30,7 +30,7 @@ export default function Layout() {
       <aside
         className={`${
           isSidebarOpen ? 'w-64' : 'w-[4.5rem]'
-        } flex shrink-0 flex-col border-r border-navy-100 bg-navy-950 text-white transition-all duration-300`}
+        } sticky top-0 flex h-screen shrink-0 flex-col border-r border-navy-100 bg-navy-950 text-white transition-all duration-300`}
       >
         <div className="border-b border-navy-800/80">
           <div className="flex items-center justify-between px-4 py-5">
@@ -118,7 +118,7 @@ export default function Layout() {
 
       {/* Main content */}
       <main className="min-w-0 flex-1 overflow-auto">
-        <div className="border-b border-navy-100 bg-white">
+        <div className="sticky top-0 z-20 border-b border-navy-100 bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
             <div className="flex items-center gap-3 text-sm text-navy-500">
               <svg className="h-4 w-4 text-gold-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

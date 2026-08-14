@@ -289,7 +289,7 @@ export default function AttendanceScanner() {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
       {/* Header */}
-      <header className="bg-navy-950">
+      <header className="sticky top-0 z-30 bg-navy-950">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-4">
           <Seal className="h-12 w-12 shrink-0" />
           <div className="min-w-0">
