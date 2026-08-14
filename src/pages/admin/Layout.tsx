@@ -5,8 +5,17 @@ import Seal from '../../components/Seal';
 
 export default function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const { logout } = useAuth();
   const navigate = useNavigate();
+
+  const showTooltip = (e: React.MouseEvent, text: string) => {
+    if (isSidebarOpen) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltip({ text, x: rect.right + 10, y: rect.top + rect.height / 2 });
+  };
+
+  const hideTooltip = () => setTooltip(null);
 
   const handleLogout = () => {
     logout();
@@ -48,7 +57,10 @@ export default function Layout() {
               )}
             </div>
             <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              onClick={() => {
+                setIsSidebarOpen(!isSidebarOpen);
+                setTooltip(null);
+              }}
               className="cursor-pointer rounded-md p-1.5 text-navy-300 transition-colors hover:bg-navy-800 hover:text-white"
               aria-label={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
             >
@@ -70,6 +82,8 @@ export default function Layout() {
             <NavLink
               key={item.path}
               to={item.path}
+              onMouseEnter={(e) => showTooltip(e, item.label)}
+              onMouseLeave={hideTooltip}
               className={({ isActive }) =>
                 `group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
@@ -101,6 +115,8 @@ export default function Layout() {
         <div className="border-t border-navy-800/80 p-3">
           <button
             onClick={handleLogout}
+            onMouseEnter={(e) => showTooltip(e, 'Logout')}
+            onMouseLeave={hideTooltip}
             className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-navy-200 transition-colors hover:bg-navy-800/60 hover:text-white"
           >
             <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,6 +163,15 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {tooltip && !isSidebarOpen && (
+        <div
+          className="pointer-events-none fixed z-50 whitespace-nowrap rounded-md bg-navy-800 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg ring-1 ring-navy-700"
+          style={{ left: tooltip.x, top: tooltip.y, transform: 'translateY(-50%)' }}
+        >
+          {tooltip.text}
+        </div>
+      )}
     </div>
   );
 }
